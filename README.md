@@ -1,8 +1,55 @@
-# CORTEX — une boucle cognitive qui découvre et pilote des entreprises qu'on ne lui a jamais décrites
+# CORTEX — une boucle cognitive qui cherche à découvrir et piloter des activités qu'on ne lui a jamais décrites
 
 CORTEX implémente la boucle **Observer → Comprendre → Confronter → (Hypothèses) → Anticiper → Prioriser → Décider → Simuler → Exécuter | Revue → Mesurer → Apprendre → Réviser → Dreaming ↺** sous forme de moteur bayésien exact, déterministe et testé, **sans LLM à l'exécution et sans intervention humaine** dans le banc d'essai.
 
 L'agent dirige un commerce (prix, commande d'un produit périssable, marketing) sans savoir lequel. Il ne voit que ses propres décisions et ses ventes. Quand il est en rupture de stock, il ne voit pas la demande réelle. Les règles cachées changent au cours de l'année.
+
+## v4 : variables construites et stratégies découvertes — et le test décisif
+
+**Ce qui a été ajouté** (`src/core/`, gelé au commit `a7d0da6`, protocole [`PREREGISTRATION_V4.md`](PREREGISTRATION_V4.md)) :
+
+- **Variables construites par l'agent**, non déclarées par l'activité : mémoire exponentielle de chaque levier, jours depuis la dernière activation, valeur de la veille de chaque mesure, interactions entre variables. La découverte décide seule lesquelles comptent.
+- **Planification sur 3 semaines dans le modèle appris**, pour découvrir des calendriers : chaque levier, chaque période, chaque phase. Elle n'intervient que si le modèle contient un mécanisme à état, et le gain doit se confirmer dans des mondes tirés de la postérieure.
+- Un audit automatique garantit que le cerveau ne contient aucun mot de métier (`test/audit.test.js`).
+
+### En développement (activités connues et contrôles, graines 1 à 4) — [`bench/V4_CONTROLES_DEV.md`](bench/V4_CONTROLES_DEV.md)
+
+- **Usine** : 73,6 % de l'oracle, contre 24,3 % pour la v3. L'agent découvre seul l'usure (« jours depuis la maintenance », 4/4) et **invente** une maintenance tous les ~11 jours ; l'optimum est d'environ 12.
+- **Contrôles** :
+  - *placebo* : maintenance inutile, aucune usure inventée (0/4) ;
+  - *usure liée à la cadence* : le bon mécanisme est trouvé (4/4), aucune usure liée au temps (0/4) ;
+  - *usure qui double au jour 200* : **le calendrier ne s'adapte pas** (11 j au lieu de 8).
+- Prévision hors échantillon améliorée par les variables construites : −0,019 ± 0,015.
+
+### Le test décisif : trois activités inconnues, écrites après le gel (graines 301 à 330, 540 années) — [`bench/V4_TEST_RESULTS.md`](bench/V4_TEST_RESULTS.md)
+
+Une **serre maraîchère**, un **hôtel** et un **atelier de réparation** à file d'attente cachée. Leurs mécanismes cachés ont été classés à l'avance en *représentables*, *approximables* ou *hors de portée*.
+
+| Hypothèse pré-enregistrée | Résultat | Verdict |
+|---|---|---|
+| H1 profit v4 > v3 | +1 457 ± 7 250 € | ❌ |
+| H2 profit v4 > habitude | −6 390 ± 9 973 € (serre et hôtel : **pire que l'habitude** ; atelier : mieux) | ❌ |
+| H3 les variables construites améliorent la prévision | −0,011 ± 0,033 | ❌ |
+| H4 la planification améliore la décision | +56 ± 4 895 € | ❌ |
+| H5 ≥ 50 % des mécanismes représentables découverts | **22 %** (v3 : 21 %) | ❌ |
+| H6 ≤ 2 fausses découvertes par an et par activité | atelier : **11,6 par an** | ❌ |
+
+**Conclusion honnête : dans des mondes qu'il n'a jamais rencontrés, CORTEX v4 n'a pas démontré qu'il sait apprendre mieux que la v3, ni même mieux qu'une règle fixe simple.** Ses succès sur l'usine ne se sont pas transférés.
+
+### Pourquoi : les causes, lues dans les données du test
+1. **Piège de l'exploration.** Dans la serre, l'agent n'arrose que **5 jours par an**, alors que l'habitude arrose chaque jour. Le gain de l'arrosage dépend de la chaleur (une interaction) ; au début, il ne paraît pas rentable, donc l'agent cesse d'arroser et ne peut plus apprendre l'interaction (2/30). Il en va de même pour l'engrais (4 jours par an) : la fertilité qui s'accumule n'est jamais découverte (0/30). La curiosité, qui aurait pu l'éviter, avait été rejetée en développement parce qu'elle n'y aidait pas.
+2. **Une stratégie installée sans être remise en cause.** À l'hôtel, la promotion reste active **273 jours par an** alors qu'elle s'use quand on la répète. La lassitude n'est découverte que 4 fois sur 30, et l'agent fait moins bien que l'habitude (sans promotion).
+3. **Un modèle faux produit des « découvertes » fausses.** Dans l'atelier, la file d'attente cachée ne peut pas être représentée. L'agent compense par **11,6 explications erronées par an**, et la fatigue, pourtant représentable, n'est jamais trouvée (0/30).
+4. **Hors de portée, il reste hors de portée** : réputation lente, rapport à une autre mesure, file d'attente cachée, soit 3/120.
+5. Le coût de calcul double (29,5 s par an contre 13,8 s pour la v3) sans bénéfice ici.
+
+### Ce que cela indique pour la suite
+Ces limites ne sont pas des réglages : ce sont des capacités manquantes, chacune vérifiable.
+
+- **Une exploration dirigée par la valeur de l'information**, qui continue d'essayer une option prometteuse mais incertaine au lieu de l'abandonner.
+- **Des variables latentes vraiment inventées**, par exemple des stocks cachés reconstruits à partir de plusieurs mesures, plutôt que choisies dans une liste.
+- **Une remise en cause des stratégies** quand les résultats s'écartent des prévisions.
+- **Un contrôle des fausses découvertes quand aucune hypothèse ne convient**, c'est-à-dire savoir dire « je ne comprends pas ».
 
 ## v3 : un même cerveau pour des entreprises différentes
 

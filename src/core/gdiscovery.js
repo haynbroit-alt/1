@@ -171,7 +171,7 @@ export function narrate(space, term, coef) {
       return `${since}${until}, ${what} ${v('a', 'ont')} ${c < 0 ? 'chuté' : 'bondi'} de ${pct(Math.exp(c) - 1)}.`;
     case 'in':
       if (inp.latent) {
-        if (inp.latentKind === 'since') return `${since}${until}, tous les 10 jours sans « ${inp.of} », ${what} ${v('change', 'changent')} de ${pct(Math.exp(c * 10 / (inp.scale ?? 1)) - 1)} (accumulation : usure, oubli, encrassement…) ; l'action la remet à zéro.`;
+        if (inp.latentKind === 'since') return `${since}${until}, tous les 10 jours sans « ${inp.of} », ${what} ${v('change', 'changent')} de ${pct(Math.exp(c * 10 / (inp.scale ?? 1)) - 1)} (effet cumulatif ; agir sur « ${inp.of} » le remet à zéro).`;
         if (inp.latentKind === 'lag') return `${since}${until}, ${what} ${v('dépend', 'dépendent')} de ${v('sa', 'leur')} valeur de la veille (inertie, coefficient ${c.toFixed(2)}).`;
         return `${since}${until}, ${what} ${v('dépend', 'dépendent')} de la mémoire récente de « ${inp.of} » (persistance λ = ${inp.lambda}) : son effet s'installe et s'efface sur plusieurs jours.`;
       }
