@@ -225,3 +225,4 @@ export function score(world, res) {
   const imprecise = res.accepted.filter((a) => modes.some((m) => m.target === a.target) && !modes.some((m) => match(a, m))).length;
   return { modes: modes.map((m, i) => ({ tau: m.tau, realized: m.realized, found: !!found[i], tauHat: found[i]?.tau ?? null, delay: found[i] ? found[i].acceptedAt : null })), nAccepted: res.accepted.length, falseOnEmpty, imprecise, K };
 }
+export { Stats, subStats, nig, sources, filtered, baseRow, WARM, HUGE, TINY };

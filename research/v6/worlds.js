@@ -5,7 +5,10 @@ export const T = 365, K = 3, L = 2, SD = 0.15;
 
 export function kindOf(seed) { const m = seed % 6; return m <= 1 ? 'placebo' : m <= 4 ? 'modes' : 'mal-specifie'; }
 
-export function makeWorld(seed, kind = kindOf(seed)) {
+// opts (prototype P2 uniquement ; sans opts, le monde de P1 est inchangé) :
+//   flouLever : indice d'un levier qui ne change que 2 fois dans l'année, et l'unique mode s'en nourrit
+//   extra(k, t, U) : terme additif sur la log-moyenne de la mesure k (forme statique, rupture, régime)
+export function makeWorld(seed, kind = kindOf(seed), opts = {}) {
   const r = makeRng(seed * 9973 + 17);
   // structure de base
   const c = Array.from({ length: K }, () => r.uniform(1, 4));
@@ -17,6 +20,11 @@ export function makeWorld(seed, kind = kindOf(seed)) {
   for (let t = 0; t < T; t++) {
     if (left <= 0) { cur = [r.uniform(-1, 1), r.next() < 0.3 ? 1 : 0]; left = r.int(5, 40); }
     U.push([...cur]); left--;
+  }
+  if (opts.flouLever != null) {
+    const r2 = makeRng(seed * 31 + 7), l = opts.flouLever;
+    const t1 = r2.int(60, 150), t2 = r2.int(200, 300), v = l === 0 ? [r2.uniform(-1, 1), r2.uniform(-1, 1), r2.uniform(-1, 1)] : [0, 1, 0];
+    for (let t = 0; t < T; t++) U[t][l] = t < t1 ? v[0] : t < t2 ? v[1] : v[2];
   }
   // modes cachés
   const modes = [];
@@ -30,6 +38,12 @@ export function makeWorld(seed, kind = kindOf(seed)) {
       modes.push({ tau, lam: 1 - 1 / tau, target: r.int(0, K - 1), sources: idx.map((j, q) => ({ idx: j, w: (q === 0 ? 1 : r.uniform(0.4, 1)) * (r.next() < 0.5 ? -1 : 1) })), strength: r.uniform(0.05, 0.25), a: 1 });
     }
   }
+  if (opts.flouLever != null) {
+    const r3 = makeRng(seed * 37 + 11);
+    modes.length = 0;
+    modes.push({ tau: Math.exp(r3.uniform(Math.log(5), Math.log(40))), target: r3.int(0, K - 1), sources: [{ idx: K + opts.flouLever, w: 1 }], strength: 0.2, a: 1 });
+    modes[0].lam = 1 - 1 / modes[0].tau;
+  }
   const noise = Array.from({ length: T }, () => Array.from({ length: K }, () => r.normal()));
   const mis = kind === 'mal-specifie' ? { target: r.int(0, K - 1), t: r.int(100, 280), jump: (r.next() < 0.5 ? -1 : 1) * r.uniform(0.2, 0.4), volT: r.int(0, K - 1), volAt: r.int(100, 280), vol: r.uniform(1.6, 2.2) } : null;
   const simulate = () => {
@@ -40,6 +54,7 @@ export function makeWorld(seed, kind = kindOf(seed)) {
       for (let k = 0; k < K; k++) {
         let mu = c[k] + dow[k][t % 7] + g[k].reduce((s, gk, l) => s + gk * U[t][l], 0);
         modes.forEach((m, i) => { if (m.target === k) mu += m.a * zs[i]; });
+        if (opts.extra) mu += opts.extra(k, t, U);
         let sd = SD;
         if (mis) { if (k === mis.target && t >= mis.t) mu += mis.jump; if (k === mis.volT && t >= mis.volAt) sd *= mis.vol; }
         y.push(mu + sd * noise[t][k]);
