@@ -1,0 +1,1568 @@
+<title>CORTEX Boulangerie</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout : instrument scientifique en trois colonnes — l'anneau de la boucle (cerveau), les courbes (le monde), le journal (la pensée). */
+:root {
+  --bg: #e9edf1; --panel: #f7f9fb; --ink: #15212c; --muted: #5a6876; --line: #d2d9e0; --soft: #e1e7ec;
+  --accent: #b9640f; --accent-ink: #ffffff; --model: #2c67ad; --oracle: #7656a6; --habit: #8a949e;
+  --good: #23784c; --warn: #9a6a00; --bad: #b8372a; --band: rgba(44, 103, 173, 0.16);
+  --f-display: "Sora", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e141a; --panel: #151d25; --ink: #e4ebf2; --muted: #93a1ae; --line: #25313c; --soft: #1c2630;
+  --accent: #e8984a; --accent-ink: #1a1007; --model: #6fa6e6; --oracle: #ad90d8; --habit: #75808b;
+  --good: #4cc38a; --warn: #e0b04a; --bad: #e86a5c; --band: rgba(111, 166, 230, 0.2); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0e141a; --panel: #151d25; --ink: #e4ebf2; --muted: #93a1ae; --line: #25313c; --soft: #1c2630;
+  --accent: #e8984a; --accent-ink: #1a1007; --model: #6fa6e6; --oracle: #ad90d8; --habit: #75808b;
+  --good: #4cc38a; --warn: #e0b04a; --bad: #e86a5c; --band: rgba(111, 166, 230, 0.2); color-scheme: dark; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 40px; }
+.wrap { max-width: 1480px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+.mono, .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+.brand h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
+.brand h1 span { color: var(--accent); }
+.brand p { margin: 2px 0 0; color: var(--muted); max-width: 70ch; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button, select, input { font: inherit; color: var(--ink); }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 12px; cursor: pointer; font-weight: 500; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--model); outline-offset: 2px; }
+select, input[type="number"] { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 8px; }
+input[type="number"] { width: 5.5em; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--panel); padding: 7px 10px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.ctl-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; max-width: 100%; }
+select { max-width: 100%; min-width: 0; }
+.ctl-group label { color: var(--muted); font-size: 12px; }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; min-width: 0; }
+.kpi .v { font-family: var(--f-mono); font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.kpi .s { color: var(--muted); font-size: 12px; }
+
+.grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 860px) { .grid { grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); } .col-right { grid-column: 1 / -1; } }
+@media (min-width: 1280px) { .grid { grid-template-columns: minmax(300px, 350px) minmax(0, 1fr) minmax(320px, 400px); } .col-right { grid-column: auto; } }
+.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; min-width: 0; }
+.panel h2 { font-size: 15px; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.panel h2 small { font-family: var(--f-mono); font-weight: 400; font-size: 11px; color: var(--muted); }
+
+#ring { width: 100%; max-width: 360px; display: block; margin: 0 auto; }
+#ring text { font-family: var(--f-body); font-size: 10.5px; fill: var(--muted); }
+#ring .n-dot { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; transition: fill .25s, stroke .25s; }
+#ring .n.today .n-dot { fill: var(--soft); stroke: var(--model); }
+#ring .n.active .n-dot { fill: var(--accent); stroke: var(--accent); }
+#ring .n.active text.lbl { fill: var(--ink); font-weight: 600; }
+#ring .edge { stroke: var(--line); stroke-width: 1.4; fill: none; }
+#ring .edge.lit { stroke: var(--model); }
+#ring .center-t { font-family: var(--f-display); font-size: 15px; fill: var(--ink); font-weight: 600; }
+#ring .center-s { font-family: var(--f-mono); font-size: 10px; fill: var(--muted); }
+#ring .cnt { font-family: var(--f-mono); font-size: 9px; fill: var(--muted); }
+.stage-now { min-height: 4.5em; font-size: 13px; border-top: 1px solid var(--line); padding-top: 8px; margin-top: 4px; }
+.stage-now b { font-family: var(--f-display); }
+
+canvas.chart { width: 100%; display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+
+.journal { display: flex; flex-direction: column; gap: 2px; max-height: 560px; overflow-y: auto; padding-right: 4px; }
+.jline { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; padding: 5px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+.jline .st { font-family: var(--f-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding-top: 1px; }
+.jline.hot .st { color: var(--accent); font-weight: 500; }
+.jline.contra .st { color: var(--bad); }
+
+.belief { border-left: 3px solid var(--model); padding: 4px 0 4px 10px; margin-bottom: 8px; font-size: 13px; }
+.belief.prov { border-left-color: var(--warn); }
+.belief.gone { border-left-color: var(--line); color: var(--muted); text-decoration: line-through; }
+.belief .meta { font-family: var(--f-mono); font-size: 11px; color: var(--muted); text-decoration: none; display: block; }
+.pill { display: inline-block; font-family: var(--f-mono); font-size: 10.5px; padding: 1px 7px; border-radius: 99px; border: 1px solid currentColor; margin-left: 4px; }
+.pill.warn { color: var(--warn); } .pill.good { color: var(--good); } .pill.bad { color: var(--bad); }
+.empty { color: var(--muted); font-size: 13px; }
+.hbar { display: grid; grid-template-columns: minmax(0, 1fr) 46px; gap: 8px; align-items: center; font-size: 12px; margin: 3px 0; }
+.hbar .track { height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; margin-top: 3px; }
+.hbar .fill { height: 100%; background: var(--model); }
+ul.plain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+ul.plain li { padding-left: 12px; position: relative; }
+ul.plain li::before { content: ""; position: absolute; left: 0; top: 0.6em; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.truth { font-size: 12.5px; }
+.truth li::before { background: var(--oracle); }
+
+/* revue humaine */
+.overlay { position: fixed; inset: 0; background: rgba(8, 12, 16, 0.55); display: flex; align-items: center; justify-content: center; z-index: 20;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.modal { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; max-width: 640px; width: 100%; max-height: 100%; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.modal h3 { font-size: 18px; }
+.cmp { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.cmp > div { border: 1px solid var(--line); border-radius: var(--r); padding: 10px; }
+.cmp .lab { font-family: var(--f-mono); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.cmp table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.cmp td { padding: 2px 0; } .cmp td:last-child { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.reasons { margin: 0; padding-left: 18px; font-size: 13px; }
+.modal .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.note { font-size: 12px; color: var(--muted); }
+footer.how { font-size: 13px; color: var(--muted); max-width: 90ch; }
+footer.how b { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { #ring .n-dot { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="eyebrow">Boucle cognitive autonome · moteur bayésien exact · aucun LLM à l'exécution</div>
+      <h1>CORTEX <span>Boulangerie</span></h1>
+      <p>Un agent dirige une boulangerie dont les règles cachées changent. Il observe, confronte les faits à sa théorie, formule des hypothèses, simule avant d'agir et vous demande votre avis quand le risque est élevé.</p>
+    </div>
+    <div class="controls">
+      <button class="btn primary" id="play" type="button">▶ Lancer</button>
+      <button class="btn" id="step1" type="button">+1 jour</button>
+      <button class="btn" id="step7" type="button">+1 semaine</button>
+      <div class="ctl-group"><label for="speed">Vitesse</label>
+        <select id="speed"><option value="slow">Pas à pas commenté</option><option value="normal" selected>Normale</option><option value="fast">Rapide</option></select></div>
+      <div class="ctl-group"><label for="seed">Monde n°</label><input id="seed" type="number" min="1" max="9999" value="1"><button class="btn" id="reset" type="button">Nouvelle année</button></div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="ctl-group"><span class="eyebrow">Revue humaine</span>
+      <div class="seg" role="group" aria-label="Qui valide les décisions risquées">
+        <button type="button" id="rev-human" aria-pressed="true">Vous</button>
+        <button type="button" id="rev-sim" aria-pressed="false">Relecteur simulé</button>
+      </div></div>
+    <div class="ctl-group"><label for="inject">Provoquer un événement</label>
+      <select id="inject">
+        <option value="rival">Un 2ᵉ concurrent (−30 % de clients)</option>
+        <option value="viral">Passage à la télé (+60 %, 3 semaines)</option>
+        <option value="elas">Crise du pouvoir d'achat (clients plus sensibles au prix)</option>
+        <option value="cost">Hausse du beurre (coût +40 %)</option>
+      </select><button class="btn" id="inject-go" type="button">Déclencher</button></div>
+    <div class="ctl-group"><button class="btn" id="truth-btn" type="button" aria-pressed="false">Révéler la vérité cachée</button></div>
+  </div>
+
+  <section class="kpis" aria-label="Indicateurs">
+    <div class="kpi"><div class="eyebrow">Jour</div><div class="v" id="k-day">0</div><div class="s" id="k-dow">sur 365</div></div>
+    <div class="kpi"><div class="eyebrow">Profit cumulé CORTEX</div><div class="v" id="k-profit">0 €</div><div class="s" id="k-pct">—</div></div>
+    <div class="kpi"><div class="eyebrow">Oracle (vérité connue)</div><div class="v" id="k-ref">0 €</div><div class="s" id="k-ref-s">habitude : 0 €</div></div>
+    <div class="kpi"><div class="eyebrow">Croyances admises</div><div class="v" id="k-bel">0</div><div class="s" id="k-bel-s">ruptures structurelles</div></div>
+    <div class="kpi"><div class="eyebrow">Revues humaines</div><div class="v" id="k-rev">0</div><div class="s" id="k-rev-s">validées / refusées</div></div>
+    <div class="kpi"><div class="eyebrow">Calibration (IC80)</div><div class="v" id="k-cal">—</div><div class="s" id="k-cal-s">couverture 28 jours</div></div>
+  </section>
+
+  <div class="grid">
+    <div class="col">
+      <section class="panel">
+        <h2>La boucle <small id="ring-sub">jour 0</small></h2>
+        <svg id="ring" viewBox="-44 0 428 340" role="img" aria-label="Étapes de la boucle cognitive"></svg>
+        <div class="stage-now" id="stage-now" aria-live="polite"></div>
+      </section>
+      <section class="panel">
+        <h2>Croyances sur le monde <small>admises par facteur de Bayes</small></h2>
+        <div id="beliefs"></div>
+      </section>
+      <section class="panel">
+        <h2>Dernières hypothèses testées <small id="hyp-sub"></small></h2>
+        <div id="hyps"></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel">
+        <h2>Clients : prévision et réalité <small>bande = intervalle à 80 % du modèle</small></h2>
+        <canvas class="chart" id="c-demand" height="260"></canvas>
+        <div class="legend"><span><i style="background:var(--ink)"></i>ventes</span><span><i style="background:var(--bad)"></i>rupture (demande ≥ stock)</span><span><i style="background:var(--model)"></i>prévision</span><span><i style="background:var(--accent)"></i>rupture crue par l'agent</span><span id="lg-truth" hidden><i style="background:var(--oracle)"></i>événement réel caché</span></div>
+      </section>
+      <section class="panel">
+        <h2>Prix et marketing <small>CORTEX contre l'oracle</small></h2>
+        <canvas class="chart" id="c-price" height="170"></canvas>
+        <div class="legend"><span><i style="background:var(--accent)"></i>prix CORTEX</span><span><i style="background:var(--oracle)"></i>prix optimal (oracle)</span><span><i style="background:var(--soft);height:8px"></i>marketing CORTEX (€/j)</span></div>
+      </section>
+      <section class="panel">
+        <h2>Profit cumulé <small>trois politiques, mêmes jours, mêmes clients</small></h2>
+        <canvas class="chart" id="c-profit" height="190"></canvas>
+        <div class="legend"><span><i style="background:var(--oracle)"></i>oracle (connaît la vérité)</span><span><i style="background:var(--accent)"></i>CORTEX</span><span><i style="background:var(--habit)"></i>habitude (prix fixe 4 €)</span></div>
+      </section>
+    </div>
+
+    <div class="col col-right">
+      <section class="panel">
+        <h2>Journal de pensée <small id="j-sub"></small></h2>
+        <div class="journal" id="journal"></div>
+      </section>
+      <section class="panel">
+        <h2>Apprentissage <small>compétences · règles · rêves</small></h2>
+        <div class="eyebrow">Compétence</div><div id="skills" class="note" style="margin:4px 0 10px"></div>
+        <div class="eyebrow">Règles apprises de vos décisions</div><ul class="plain" id="rules" style="margin:6px 0 10px"></ul>
+        <div class="eyebrow">Dernier rêve (auto-audit hebdomadaire)</div><ul class="plain" id="dream" style="margin-top:6px"></ul>
+      </section>
+      <section class="panel" id="truth-panel" hidden>
+        <h2>Vérité cachée <small>invisible pour l'agent</small></h2>
+        <ul class="plain truth" id="truth"></ul>
+      </section>
+    </div>
+  </div>
+
+  <footer class="how">
+    <b>Comment vérifier.</b> L'agent ne voit que le jour, le coût unitaire, ses propres décisions et ses ventes. Quand le stock est épuisé, il ne voit pas la demande réelle. Les ruptures structurelles sont cachées. Révélez-les pour comparer avec ce que l'agent a déduit seul, ou provoquez-en une et regardez combien de jours il lui faut pour la détecter et l'expliquer. Le code source, les tests et le banc d'essai sur 20 mondes figurent dans le dépôt.
+  </footer>
+</div>
+
+<div class="overlay" id="review" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rv-title">
+    <div class="eyebrow" id="rv-eyebrow">Revue humaine · jour 0</div>
+    <h3 id="rv-title">L'agent Risque demande votre validation</h3>
+    <ul class="reasons" id="rv-reasons"></ul>
+    <div class="cmp">
+      <div><div class="lab">Proposition du CEO</div><table id="rv-prop"></table></div>
+      <div><div class="lab">Plan de repli (statu quo)</div><table id="rv-fall"></table></div>
+    </div>
+    <div><div class="lab eyebrow">Profit simulé de la proposition (240 mondes possibles)</div><canvas class="chart" id="rv-hist" height="110"></canvas></div>
+    <p class="note" id="rv-voi"></p>
+    <div class="actions">
+      <button class="btn" id="rv-reject" type="button">Refuser (plan de repli)</button>
+      <button class="btn primary" id="rv-approve" type="button">Approuver</button>
+    </div>
+    <p class="note">Vos décisions comptent : un refus devient une règle que l'agent respectera, et quatre semaines sans refus l'assouplissent.</p>
+  </div>
+</div>
+
+<script>
+// ---- src/rng.js ----
+// Générateur pseudo-aléatoire déterministe (mulberry32) + lois usuelles.
+function makeRng(seed = 1) {
+  let s = (seed >>> 0) || 1;
+  const next = () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  let spare = null;
+  const normal = () => {
+    if (spare !== null) { const v = spare; spare = null; return v; }
+    let u = 0, v = 0;
+    while (u <= 1e-12) u = next();
+    v = next();
+    const r = Math.sqrt(-2 * Math.log(u));
+    spare = r * Math.sin(2 * Math.PI * v);
+    return r * Math.cos(2 * Math.PI * v);
+  };
+  // Marsaglia–Tsang
+  const gamma = (shape) => {
+    if (shape < 1) return gamma(shape + 1) * Math.pow(next() || 1e-12, 1 / shape);
+    const d = shape - 1 / 3, c = 1 / Math.sqrt(9 * d);
+    for (;;) {
+      let x, v;
+      do { x = normal(); v = 1 + c * x; } while (v <= 0);
+      v = v * v * v;
+      const u = next();
+      if (u < 1 - 0.0331 * x ** 4) return d * v;
+      if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
+    }
+  };
+  const uniform = (a, b) => a + (b - a) * next();
+  const int = (a, b) => Math.floor(uniform(a, b + 1));
+  return { next, normal, gamma, uniform, int };
+}
+
+// Poisson par inversion de la CDF à partir d'un uniforme fourni :
+// monotone en lambda → permet des "nombres aléatoires communs" entre politiques.
+function poissonInv(lambda, u) {
+  if (lambda <= 0) return 0;
+  if (lambda > 400) {
+    // approximation normale avec correction de continuité
+    const z = normInv(Math.min(Math.max(u, 1e-12), 1 - 1e-12));
+    return Math.max(0, Math.round(lambda + Math.sqrt(lambda) * z));
+  }
+  let k = 0, p = Math.exp(-lambda), cdf = p;
+  while (u > cdf && k < 10000) { k++; p *= lambda / k; cdf += p; }
+  return k;
+}
+
+// Quantile de la loi normale (Acklam), précision ~1e-9.
+function normInv(p) {
+  const a = [-3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.38357751867269e2, -3.066479806614716e1, 2.506628277459239];
+  const b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1];
+  const c = [-7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+  const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416];
+  const pl = 0.02425;
+  if (p <= 0) return -Infinity;
+  if (p >= 1) return Infinity;
+  let q, r;
+  if (p < pl) { q = Math.sqrt(-2 * Math.log(p)); return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  if (p > 1 - pl) { q = Math.sqrt(-2 * Math.log(1 - p)); return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  q = p - 0.5; r = q * q;
+  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+
+function normCdf(x) {
+  // Abramowitz–Stegun 7.1.26 via erf
+  const t = 1 / (1 + 0.3275911 * Math.abs(x) / Math.SQRT2);
+  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-(x * x) / 2);
+  return x >= 0 ? 0.5 * (1 + y) : 0.5 * (1 - y);
+}
+
+function lgamma(x) {
+  // Lanczos g=7
+  const g = 7, coef = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+  if (x < 0.5) return Math.log(Math.PI / Math.abs(Math.sin(Math.PI * x))) - lgamma(1 - x);
+  x -= 1;
+  let a = coef[0];
+  const t = x + g + 0.5;
+  for (let i = 1; i < g + 2; i++) a += coef[i] / (x + i);
+  return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+}
+
+// Nœuds de quadrature normaux fixes (quantiles médians) — déterministes.
+function normalNodes(K = 48) {
+  const z = new Float64Array(K);
+  for (let i = 0; i < K; i++) z[i] = normInv((i + 0.5) / K);
+  // re-normaliser la variance des nœuds à 1
+  let v = 0; for (const x of z) v += x * x; v = Math.sqrt(v / K);
+  for (let i = 0; i < K; i++) z[i] /= v;
+  return z;
+}
+
+// ---- src/linalg.js ----
+// Algèbre linéaire minimale pour petites matrices denses (tableaux de lignes).
+const zeros = (n, m) => Array.from({ length: n }, () => new Array(m).fill(0));
+const eye = (n, s = 1) => { const A = zeros(n, n); for (let i = 0; i < n; i++) A[i][i] = s; return A; };
+const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+const matVec = (A, x) => A.map((r) => dot(r, x));
+
+function cholesky(A) {
+  const n = A.length, L = zeros(n, n);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j <= i; j++) {
+      let s = A[i][j];
+      for (let k = 0; k < j; k++) s -= L[i][k] * L[j][k];
+      if (i === j) {
+        if (s <= 1e-12) s = 1e-12; // garde-fou numérique
+        L[i][i] = Math.sqrt(s);
+      } else L[i][j] = s / L[j][j];
+    }
+  }
+  return L;
+}
+
+function cholSolve(L, b) {
+  const n = L.length, y = new Array(n), x = new Array(n);
+  for (let i = 0; i < n; i++) { let s = b[i]; for (let k = 0; k < i; k++) s -= L[i][k] * y[k]; y[i] = s / L[i][i]; }
+  for (let i = n - 1; i >= 0; i--) { let s = y[i]; for (let k = i + 1; k < n; k++) s -= L[k][i] * x[k]; x[i] = s / L[i][i]; }
+  return x;
+}
+
+function cholInverse(L) {
+  const n = L.length, inv = zeros(n, n);
+  for (let j = 0; j < n; j++) {
+    const e = new Array(n).fill(0); e[j] = 1;
+    const col = cholSolve(L, e);
+    for (let i = 0; i < n; i++) inv[i][j] = col[i];
+  }
+  return inv;
+}
+
+const cholLogDet = (L) => { let s = 0; for (let i = 0; i < L.length; i++) s += 2 * Math.log(L[i][i]); return s; };
+
+// ---- src/model.js ----
+// Modèle du monde : régression linéaire bayésienne conjuguée Normale–Inverse-Gamma.
+// y = log(demande) ; x = caractéristiques (prix, jour, marketing, + ruptures structurelles crues).
+// Tout est exact et fermé : postérieure, prédictive de Student, vraisemblance marginale
+// (utilisée pour comparer des hypothèses par facteur de Bayes).
+
+
+
+const P_REF = 4.0;
+const DOW_NAMES = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+
+// Caractéristiques de base. r = {t, dow, price, marketing}
+function baseFeatures(r) {
+  const x = [1, Math.log(r.price / P_REF)];
+  for (let d = 1; d < 7; d++) x.push(r.dow === d ? 1 : 0);
+  x.push(Math.log1p(r.marketing / 10));
+  return x;
+}
+const BASE_NAMES = ['niveau', 'élasticité', ...DOW_NAMES.slice(1).map((d) => `effet ${d}`), 'effet marketing'];
+
+function beliefFeature(b, r) {
+  const on = r.t >= b.tau && (b.end == null || r.t < b.end);
+  if (b.type === 'level') return on ? 1 : 0;
+  if (b.type === 'elasticity') return on ? Math.log(r.price / P_REF) : 0;
+  if (b.type === 'marketing') return on ? Math.log1p(r.marketing / 10) : 0;
+  return 0;
+}
+
+function features(r, beliefs) {
+  const x = baseFeatures(r);
+  for (const b of beliefs) x.push(beliefFeature(b, r));
+  return x;
+}
+
+// Prior : connaissances génériques d'un commerçant, volontairement faibles.
+// NB : dans le prior conjugué NIG, la covariance a priori est σ²·V0. On exprime donc des
+// écarts-types ABSOLUS (sd) et on divise par la variance de bruit a priori S0² pour obtenir V0.
+const S0 = 0.15;
+function priorFor(beliefs) {
+  const m0 = [Math.log(100), -1, 0, 0, 0, 0, 0, 0, 0.05];
+  const sd = [2, 1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
+  for (const b of beliefs) { m0.push(0); sd.push(0.7); }
+  const v0 = sd.map((x) => (x * x) / (S0 * S0));
+  return { m0, v0, a0: 3, b0: 2 * S0 * S0 };
+}
+
+// Ajuste la postérieure sur des enregistrements (non censurés) avec un jeu de croyances.
+function fit(records, beliefsIn) {
+  const beliefs = beliefsIn.map((b) => ({ type: b.type, tau: b.tau, end: b.end }));
+  const { m0, v0, a0, b0 } = priorFor(beliefs);
+  const d = m0.length;
+  const P = Array.from({ length: d }, (_, i) => { const r = new Array(d).fill(0); r[i] = 1 / v0[i]; return r; });
+  const rhs = m0.map((m, i) => m / v0[i]);
+  let yy = 0, n = 0;
+  for (const r of records) {
+    // jours de rupture : demande ≥ stock → on utilise l'espérance tronquée imputée (pas d'EM)
+    const y = r.censored ? r.yImp : r.y;
+    if (y == null) continue;
+    const x = features(r, beliefs);
+    for (let i = 0; i < d; i++) { rhs[i] += x[i] * y; const xi = x[i]; if (xi === 0) continue; const Pi = P[i]; for (let j = 0; j < d; j++) Pi[j] += xi * x[j]; }
+    yy += y * y; n++;
+  }
+  const L = cholesky(P);
+  const mn = cholSolve(L, rhs);
+  const m0Pm0 = m0.reduce((s, m, i) => s + (m * m) / v0[i], 0);
+  const an = a0 + n / 2;
+  const bn = Math.max(1e-9, b0 + 0.5 * (yy + m0Pm0 - dot(mn, rhs)));
+  const logDetV0 = v0.reduce((s, v) => s + Math.log(v), 0);
+  const logDetVn = -cholLogDet(L);
+  const logML = -0.5 * n * Math.log(2 * Math.PI) + 0.5 * (logDetVn - logDetV0) + a0 * Math.log(b0) - an * Math.log(bn) + lgamma(an) - lgamma(a0);
+  let Vn = null;
+  const getVn = () => (Vn ??= cholInverse(L));
+  return {
+    beliefs, mn, an, bn, n, logML, L,
+    get Vn() { return getVn(); },
+    sigma2: bn / an,
+    // Prédictive de Student : moyenne, échelle, ddl
+    predict(r) {
+      const x = features(r, beliefs);
+      const Vx = matVec(getVn(), x);
+      const s2 = (bn / an) * (1 + dot(x, Vx));
+      return { mu: dot(x, mn), scale: Math.sqrt(s2), dof: 2 * an };
+    },
+    coefSd(i) { return Math.sqrt((bn / an) * getVn()[i][i]); },
+    // Tirage (θ, σ²) a posteriori — pour Thompson sampling et le bac à sable
+    sample(rng) {
+      const sigma2 = 1 / (rng.gamma(an) / bn);
+      const C = cholesky(getVn().map((row) => row.map((v) => v * sigma2)));
+      const z = mn.map(() => rng.normal());
+      const theta = mn.map((m, i) => { let s = m; for (let k = 0; k <= i; k++) s += C[i][k] * z[k]; return s; });
+      return { theta, sigma: Math.sqrt(sigma2) };
+    },
+  };
+}
+
+const predictWith = (theta, r, beliefs) => dot(features(r, beliefs), theta);
+
+// ---- src/world.js ----
+// Le monde caché : une boulangerie (produit périssable, invendus perdus chaque soir).
+// L'agent ne voit QUE : jour, coût unitaire du jour, ses propres actions, et ses ventes
+// (plafonnées par son stock → demande censurée). Tout le reste est caché.
+
+
+
+const DOW_LOG = [0.85, 0.9, 0.95, 1.0, 1.15, 1.35, 1.1].map(Math.log);
+const PRICE_MIN = 1.5, PRICE_MAX = 6.0;
+const MARKETING_LEVELS = [0, 20, 50, 100];
+const FIXED_COST = 150;
+const HORIZON = 365;
+
+function defaultScenario(seed) {
+  const r = makeRng(seed * 7919 + 13);
+  const comp = Math.round(r.uniform(85, 120));
+  const cost = Math.round(r.uniform(140, 170));
+  const elas = Math.round(r.uniform(190, 225));
+  const viral = Math.round(r.uniform(255, 285));
+  return {
+    alpha: Math.log(r.uniform(110, 135)),
+    beta: r.uniform(-1.95, -1.6),
+    gamma: r.uniform(0.12, 0.2),
+    noise: 0.12,
+    baseCost: 1.2,
+    events: [
+      { type: 'level', start: comp, end: null, mag: Math.log(r.uniform(0.7, 0.8)), label: 'Un concurrent ouvre en face' },
+      { type: 'cost', start: cost, value: r.uniform(1.6, 1.8), label: 'Le prix de la farine flambe' },
+      { type: 'elasticity', start: elas, mag: r.uniform(-0.9, -0.6), label: 'Les clients deviennent plus sensibles au prix' },
+      { type: 'level', start: viral, end: viral + Math.round(r.uniform(22, 35)), mag: Math.log(r.uniform(1.4, 1.65)), label: 'Une vidéo virale attire du monde' },
+    ],
+  };
+}
+
+function createWorld(seed = 1, scenario = defaultScenario(seed)) {
+  const sc = structuredClone(scenario);
+  // Nombres aléatoires communs : pré-tirés par jour, indépendants des actions.
+  const nr = makeRng(seed * 104729 + 7);
+  const noise = [], unif = [];
+  for (let t = 0; t < 2000; t++) { noise.push(nr.normal()); unif.push(nr.next()); }
+
+  const w = {
+    seed, scenario: sc, t: 0,
+    dow: (t) => t % 7,
+    cost(t) { let c = sc.baseCost; for (const e of sc.events) if (e.type === 'cost' && t >= e.start) c = e.value; return c; },
+    logRate(t, price, marketing) {
+      let beta = sc.beta, lvl = sc.alpha;
+      for (const e of sc.events) {
+        const on = t >= e.start && (e.end == null || t < e.end);
+        if (!on) continue;
+        if (e.type === 'level') lvl += e.mag;
+        if (e.type === 'elasticity') beta += e.mag;
+      }
+      return lvl + beta * Math.log(price / P_REF) + DOW_LOG[t % 7] + sc.gamma * Math.log1p(marketing / 10);
+    },
+    trueBeta(t) { let b = sc.beta; for (const e of sc.events) if (e.type === 'elasticity' && t >= e.start) b += e.mag; return b; },
+    demand(t, price, marketing) {
+      const lam = Math.exp(w.logRate(t, price, marketing) + sc.noise * noise[t]);
+      return poissonInv(lam, unif[t]);
+    },
+    // Exécute une journée. action = {price, marketing, order}
+    step(action) {
+      const t = w.t;
+      const price = Math.min(PRICE_MAX, Math.max(PRICE_MIN, action.price));
+      const marketing = action.marketing;
+      const order = Math.max(0, Math.round(action.order));
+      const cost = w.cost(t);
+      const D = w.demand(t, price, marketing);
+      const sales = Math.min(D, order);
+      const profit = price * sales - cost * order - marketing - FIXED_COST;
+      w.t++;
+      return { t, dow: t % 7, price, marketing, order, cost, sales, censored: sales >= order, waste: order - sales, profit, _demand: D };
+    },
+    inject(e) { sc.events.push({ ...e }); },
+    activeEvents(t) { return sc.events.filter((e) => t >= e.start && (e.end == null || t < e.end)); },
+  };
+  return w;
+}
+
+// ---- src/econ.js ----
+// Économie de la décision : newsvendor sous demande log-normale, optimisation prix × marketing.
+
+
+
+const NODES = normalNodes(32);
+const PRICE_GRID = (() => { const g = []; for (let p = PRICE_MIN; p <= PRICE_MAX + 1e-9; p += 0.1) g.push(Math.round(p * 100) / 100); return g; })();
+
+// Quantité optimale (newsvendor) : quantile (p-c)/p de la demande, décalé de `delta` (compétence apprise).
+function newsvendorQ(mu, s, price, cost, delta = 0) {
+  if (price <= cost) return 0;
+  const cr = (price - cost) / price;
+  return Math.max(0, Math.round(Math.exp(mu + s * (normInv(cr) + delta))));
+}
+
+// Profit espéré d'une action sous une demande log-normale(mu, s).
+function expectedProfit(mu, s, price, marketing, cost, q) {
+  let sales = 0;
+  for (let i = 0; i < NODES.length; i++) sales += Math.min(Math.exp(mu + s * NODES[i]), q);
+  sales /= NODES.length;
+  return { profit: price * sales - cost * q - marketing - FIXED_COST, sales, q };
+}
+
+// Optimise (prix, marketing) ; predict(price, marketing) → {mu, s}.
+// constraint(price, marketing) → bool (règles apprises / pas maximal).
+function optimize(predict, cost, delta = 0, constraint = () => true) {
+  let best = null;
+  for (const m of MARKETING_LEVELS) {
+    for (const p of PRICE_GRID) {
+      if (!constraint(p, m)) continue;
+      const { mu, s } = predict(p, m);
+      const q = newsvendorQ(mu, s, p, cost, delta);
+      const ev = expectedProfit(mu, s, p, m, cost, q);
+      if (!best || ev.profit > best.profit) best = { price: p, marketing: m, order: q, profit: ev.profit, sales: ev.sales };
+    }
+  }
+  return best;
+}
+
+// ---- src/agent.js ----
+// CORTEX — la boucle cognitive.
+// Matin  : OBSERVER → COMPRENDRE → CONFRONTER → (HYPOTHÈSES) → ANTICIPER → PRIORISER → DÉCIDER → SIMULER → EXÉCUTER | REVUE HUMAINE
+// Soir   : MESURER → APPRENDRE → RÉVISER → (DREAMING, chaque dimanche soir) → retour
+// Aucune magie : chaque étape est un calcul explicite et traçable.
+
+
+
+
+
+
+const STAGES = [
+  ['observer', 'Observer'], ['comprendre', 'Comprendre'], ['confronter', 'Confronter'], ['hypotheses', 'Hypothèses'],
+  ['anticiper', 'Anticiper'], ['prioriser', 'Prioriser'], ['decider', 'Décider'], ['simuler', 'Simuler'],
+  ['executer', 'Exécuter'], ['revue', 'Revue humaine'], ['mesurer', 'Mesurer'], ['apprendre', 'Apprendre'],
+  ['reviser', 'Réviser'], ['dreaming', 'Dreaming'],
+];
+
+const WARMUP = 28;
+const TYPE_FR = { level: 'niveau', elasticity: 'élasticité', marketing: 'marketing', end: 'fin d’effet' };
+const CUSUM_K = 0.5, CUSUM_H = 5;
+const ECUSUM_K = 0.25, ECUSUM_H = 5;
+const DITHER = 0.08;
+const Z80 = 1.2816;
+const pct = (x) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(0)} %`;
+const eur = (x) => `${x >= 0 ? '' : '−'}${Math.abs(x).toFixed(0)} €`;
+const f2 = (x) => x.toFixed(2);
+
+function createAgent(opts = {}) {
+  const o = { hypotheses: true, dreaming: true, learning: true, vigilance: true, window: null, seed: 1, name: 'CORTEX', ...opts };
+  const rng = makeRng(o.seed * 31337 + 1);
+  const A = {
+    opts: o,
+    records: [], beliefs: [], retracted: [], hypothesisLog: [],
+    model: null, kappa: 1, cusum: { pos: 0, neg: 0 }, ecusum: { pos: 0, neg: 0 }, lastZ: null,
+    skills: { order: { name: 'Commande newsvendor', version: 1, delta: 0, notes: [] } },
+    rules: { maxStep: 0.15, pLossMax: 0.3, marketingCap: 100, approvals: 0, rejections: 0, lastRejection: null, list: [] },
+    memory: [], journal: [], stageCount: Object.fromEntries(STAGES.map(([k]) => [k, 0])),
+    pending: null, today: null, kpi: { cumProfit: 0, days: 0 }, nextBeliefId: 1,
+    insights: [], agenda: [],
+  };
+
+  const trace = [];
+  const emit = (stage, text, data = {}) => { A.stageCount[stage]++; const e = { t: A.today?.t ?? null, stage, text, data }; trace.push(e); return e; };
+
+  // ---------- utilitaires du modèle ----------
+  const trainingSet = () => (o.window ? A.records.slice(-o.window) : A.records);
+  // Ré-imputation (pas d'EM) des jours de rupture avec le modèle courant avant chaque ajustement.
+  const impute = (rec, model) => {
+    const pp = model.predict(rec);
+    const a = (rec.y - pp.mu) / pp.scale;
+    const tail = Math.max(1e-9, 1 - normCdf(a));
+    rec.yImp = Math.max(rec.y, pp.mu + pp.scale * Math.exp(-0.5 * a * a) / Math.sqrt(2 * Math.PI) / tail);
+  };
+  const refit = () => {
+    const data = trainingSet();
+    if (A.model) for (const r of data) if (r.censored) impute(r, A.model);
+    A.model = fit(data, A.beliefs);
+  };
+  refit();
+
+  const dayRec = (t, price, marketing) => ({ t, dow: t % 7, price, marketing });
+  const predictor = (model, t) => (price, marketing) => {
+    const p = model.predict(dayRec(t, price, marketing));
+    return { mu: p.mu, s: p.scale * A.kappa };
+  };
+  const thetaPredictor = (theta, sigma, t) => (price, marketing) => ({ mu: dot(features(dayRec(t, price, marketing), A.beliefs), theta), s: sigma });
+
+  // élasticité effective aujourd'hui (coef de base + croyances actives) et son écart-type
+  function elasticityNow(t) {
+    const m = A.model, d = m.mn.length;
+    const g = new Array(d).fill(0); g[1] = 1;
+    A.beliefs.forEach((b, i) => { if (b.type === 'elasticity' && t >= b.tau) g[9 + i] = 1; });
+    const est = dot(g, m.mn);
+    const sd = Math.sqrt(m.sigma2 * dot(g, matVec(m.Vn, g)));
+    return { est, sd };
+  }
+  function levelNow(t) {
+    // demande attendue au prix de référence, jour moyen, sans marketing
+    const p = A.model.predict(dayRec(t, P_REF, 0));
+    return Math.exp(p.mu);
+  }
+
+  const priceRange = () => {
+    if (!A.records.length) return [P_REF, P_REF];
+    let lo = Infinity, hi = -Infinity;
+    for (const r of A.records) { lo = Math.min(lo, r.price); hi = Math.max(hi, r.price); }
+    return [lo, hi];
+  };
+  const triedMarketing = () => new Set(A.records.map((r) => r.marketing));
+
+  // ---------- HYPOTHÈSES : sélection de modèles bayésienne exacte ----------
+  function generateAndTest(t) {
+    const data = trainingSet();
+    const base = A.model.logML;
+    const cands = [];
+    const lo = Math.max(WARMUP, t - 45), hi = t - 2;
+    for (let tau = lo; tau <= hi; tau++) {
+      for (const type of ['level', 'elasticity', 'marketing']) {
+        const b = { type, tau, end: null };
+        if (A.beliefs.some((x) => x.type === type && Math.abs(x.tau - tau) < 7 && x.end == null)) continue;
+        const m = fit(data, [...A.beliefs, b]);
+        cands.push({ ...b, logML: m.logML, coef: m.mn[m.mn.length - 1], sd: m.coefSd(m.mn.length - 1) });
+      }
+      // fin d'un effet temporaire déjà cru
+      A.beliefs.forEach((x, i) => {
+        if (x.type !== 'level' || x.end != null || tau <= x.tau + 5) return;
+        const bs = A.beliefs.map((y, j) => (j === i ? { ...y, end: tau } : y));
+        const m = fit(data, bs);
+        cands.push({ type: 'end', tau, target: x.id, logML: m.logML, coef: m.mn[9 + i] });
+      });
+    }
+    // prior : 50 % "rien n'a changé" ; 50 % réparti uniformément sur les ruptures candidates
+    const logPriorNull = Math.log(0.5), logPriorEach = Math.log(0.5 / Math.max(1, cands.length));
+    const scores = [base + logPriorNull, ...cands.map((c) => c.logML + logPriorEach)];
+    const mx = Math.max(...scores);
+    const Z = scores.reduce((s, x) => s + Math.exp(x - mx), 0);
+    const pNull = Math.exp(scores[0] - mx) / Z;
+    cands.forEach((c, i) => { c.post = Math.exp(scores[i + 1] - mx) / Z; c.logBF = c.logML - base; });
+    const byType = {};
+    for (const c of cands) byType[c.type] = (byType[c.type] || 0) + c.post;
+    cands.sort((a, b) => b.post - a.post);
+    return { pNull, byType, top: cands.slice(0, 6), best: cands[0] };
+  }
+
+  function narrate(b) {
+    if (b.type === 'level') {
+      const e = Math.exp(b.coef) - 1;
+      return e < 0
+        ? `La demande a chuté de ${pct(e)} à partir du jour ${b.tau}. Explication la plus probable : un concurrent ou une perte de clientèle.`
+        : `La demande a bondi de ${pct(e)} à partir du jour ${b.tau}. Explication la plus probable : un effet de mode ou un événement local.`;
+    }
+    if (b.type === 'elasticity') return `Depuis le jour ${b.tau}, les clients ${b.coef < 0 ? 'réagissent plus fortement' : 'réagissent moins'} au prix (élasticité ${b.coef < 0 ? 'renforcée' : 'atténuée'} de ${f2(Math.abs(b.coef))}).`;
+    if (b.type === 'marketing') return `L'efficacité du marketing a changé au jour ${b.tau} (${b.coef > 0 ? 'plus' : 'moins'} efficace).`;
+    return '';
+  }
+
+  // ---------- MATIN ----------
+  function planDay(ctx) {
+    trace.length = 0;
+    const t = ctx.t; A.today = { t, cost: ctx.cost };
+    const last = A.records[A.records.length - 1];
+
+    // OBSERVER
+    let obsText = `Jour ${t} (${DOW_NAMES[t % 7]}). Coût unitaire : ${f2(ctx.cost)} €.`;
+    if (last) obsText += ` Hier : ${last.sales} ventes pour ${last.order} produits${last.censored ? ' (rupture : demande réelle inconnue, ≥ stock)' : ''}, profit ${eur(last.profit)}.`;
+    if (last && Math.abs(ctx.cost - last.cost) > 1e-9) obsText += ` ⚠ Le coût a changé de ${pct(ctx.cost / last.cost - 1)}.`;
+    emit('observer', obsText, { cost: ctx.cost });
+
+    // COMPRENDRE
+    const el = elasticityNow(t), lvl = levelNow(t);
+    const mk = A.model.mn[8];
+    emit('comprendre', `Mon modèle du monde : ~${lvl.toFixed(0)} clients/jour à ${P_REF} €, élasticité ${f2(el.est)} ± ${f2(el.sd)}, marketing ${mk >= 0 ? '+' : ''}${f2(mk)}, bruit σ=${f2(Math.sqrt(A.model.sigma2))}. ${A.beliefs.length} rupture(s) structurelle(s) admise(s).`,
+      { level: lvl, elasticity: el.est, elasticitySd: el.sd, marketing: mk, sigma: Math.sqrt(A.model.sigma2), nBeliefs: A.beliefs.length });
+
+    // CONFRONTER
+    let contradiction = false;
+    if (t < WARMUP) emit('confronter', `Phase d'apprentissage (${t}/${WARMUP} jours) : je collecte des faits avant de juger ma théorie.`, { verdict: 'apprentissage' });
+    else if (A.lastZ == null) emit('confronter', `Pas de prédiction comparable hier.`, { verdict: 'n/a' });
+    else {
+      const { pos, neg } = A.cusum;
+      const ep = A.ecusum.pos, en = A.ecusum.neg;
+      const levelAlarm = pos > CUSUM_H || neg > CUSUM_H, priceAlarm = ep > ECUSUM_H || en > ECUSUM_H;
+      contradiction = levelAlarm || priceAlarm;
+      const v = contradiction ? 'contradiction' : 'confirmation';
+      emit('confronter', contradiction
+        ? `Contradiction : ${levelAlarm ? `les ventes s'écartent durablement de ma théorie (CUSUM ${pos > neg ? '↑' : '↓'} ${Math.max(pos, neg).toFixed(1)} > ${CUSUM_H})` : ''}${levelAlarm && priceAlarm ? ' et ' : ''}${priceAlarm ? `mes erreurs sont corrélées au prix (score ${Math.max(ep, en).toFixed(1)} > ${ECUSUM_H}) : la réaction des clients au prix a peut-être changé` : ''}. Dernier écart z=${f2(A.lastZ)}.`
+        : `Confirmation : l'écart d'hier (z=${f2(A.lastZ)}) est compatible avec mon modèle (CUSUM ${pos.toFixed(1)}/${neg.toFixed(1)}, corrélation-prix ${ep.toFixed(1)}/${en.toFixed(1)}).`,
+        { verdict: v, z: A.lastZ, cusumPos: pos, cusumNeg: neg, ecusumPos: ep, ecusumNeg: en, priceAlarm });
+    }
+
+    // HYPOTHÈSES
+    if (contradiction && o.hypotheses) {
+      const H = generateAndTest(t);
+      const pChange = 1 - H.pNull;
+      const lines = H.top.slice(0, 3).map((c) => `${c.type === 'level' ? 'rupture de niveau' : c.type === 'elasticity' ? 'changement d’élasticité' : c.type === 'end' ? 'fin d’un effet temporaire' : 'changement d’effet marketing'} au jour ${c.tau} (p=${(c.post * 100).toFixed(1)} %)`);
+      let accepted = null, ambiguous = false;
+      const types = Object.entries(H.byType).sort((a, b) => b[1] - a[1]);
+      if (pChange > 0.95 && types.length) {
+        const [bestType, mass] = types[0];
+        ambiguous = mass / pChange < 0.6 && bestType !== 'end';
+        const c = H.top.find((x) => x.type === bestType) || H.best;
+        if (c.type === 'end') {
+          const b = A.beliefs.find((x) => x.id === c.target);
+          b.end = c.tau; b.narrative = `${narrate(b)} Cet effet a pris fin au jour ${c.tau} : retour à la normale.`;
+          accepted = { ...b, kind: 'end' };
+        } else {
+          const b = { id: A.nextBeliefId++, type: c.type, tau: c.tau, end: null, coef: c.coef, acceptedAt: t, logBF: c.logBF, post: c.post, provisional: ambiguous, rivals: types.slice(1, 3).map(([k, v]) => ({ type: k, p: v })) };
+          b.narrative = narrate(b);
+          A.beliefs.push(b); accepted = b;
+          if (ambiguous) A.experimentUntil = t + 10;
+        }
+        refit();
+        A.cusum = { pos: 0, neg: 0 }; A.ecusum = { pos: 0, neg: 0 };
+      } else if (pChange > 0.7) {
+        A.experimentUntil = Math.max(A.experimentUntil ?? -1, t + 7);
+        A.cusum = { pos: Math.min(A.cusum.pos, CUSUM_H * 0.8), neg: Math.min(A.cusum.neg, CUSUM_H * 0.8) };
+        A.ecusum = { pos: Math.min(A.ecusum.pos, ECUSUM_H * 0.8), neg: Math.min(A.ecusum.neg, ECUSUM_H * 0.8) };
+      } else {
+        A.cusum = { pos: Math.min(A.cusum.pos, CUSUM_H * 0.6), neg: Math.min(A.cusum.neg, CUSUM_H * 0.6) };
+        A.ecusum = { pos: Math.min(A.ecusum.pos, ECUSUM_H * 0.6), neg: Math.min(A.ecusum.neg, ECUSUM_H * 0.6) };
+      }
+      A.hypothesisLog.push({ t, pChange, byType: H.byType, top: H.top.map(({ type, tau, post, logBF, coef }) => ({ type, tau, post, logBF, coef })), accepted: accepted ? { type: accepted.type, tau: accepted.tau, kind: accepted.kind } : null });
+      const typeTxt = types.map(([k, v]) => `${TYPE_FR[k]} ${(v * 100).toFixed(0)} %`).join(', ');
+      emit('hypotheses', accepted
+        ? `Pourquoi ? ${accepted.narrative} (P(changement) = ${(pChange * 100).toFixed(1)} % ; ${typeTxt}).${ambiguous ? ' Explications concurrentes encore indiscernables → croyance PROVISOIRE et expérience discriminante de 10 jours (variation de prix contrôlée).' : ' Théorie du monde mise à jour.'}`
+        : `Pourquoi ? Hypothèses testées : ${lines.join(' ; ')}. P(vrai changement) ${(pChange * 100).toFixed(0)} % (< 95 %)${pChange > 0.7 ? ' → je lance une expérience de 7 jours pour trancher.' : ' : j’attends plus de données.'}`,
+        { pChange, top: H.top, byType: H.byType, accepted, ambiguous });
+    } else if (contradiction) {
+      emit('hypotheses', `Contradiction détectée mais génération d'hypothèses désactivée (mode ablation) : je continue avec ma théorie.`, { disabled: true });
+      A.cusum = { pos: 0, neg: 0 }; A.ecusum = { pos: 0, neg: 0 };
+    }
+
+    // ANTICIPER : prévision 7 jours sous la politique actuelle + opportunités
+    const cur = last ? { price: last.price, marketing: last.marketing } : { price: P_REF, marketing: 0 };
+    const pred = predictor(A.model, t);
+    const forecast = [];
+    for (let k = 0; k < 7; k++) {
+      const pk = A.model.predict(dayRec(t + k, cur.price, cur.marketing));
+      const s = pk.scale * A.kappa;
+      forecast.push({ t: t + k, mean: Math.exp(pk.mu), lo: Math.exp(pk.mu - Z80 * s), hi: Math.exp(pk.mu + Z80 * s) });
+    }
+    const curQ = newsvendorQ(pred(cur.price, cur.marketing).mu, pred(cur.price, cur.marketing).s, cur.price, ctx.cost, A.skills.order.delta);
+    const curEv = expectedProfit(pred(cur.price, cur.marketing).mu, pred(cur.price, cur.marketing).s, cur.price, cur.marketing, ctx.cost, curQ);
+    const freeOpt = optimize(pred, ctx.cost, A.skills.order.delta, (p, m) => m <= A.rules.marketingCap);
+    const opportunity = freeOpt.profit - curEv.profit;
+    const peak = forecast.reduce((a, b) => (b.mean > a.mean ? b : a));
+    const risks = [];
+    if (curEv.profit < 0) risks.push(`la politique actuelle perd de l'argent (${eur(curEv.profit)}/jour attendu)`);
+    if (el.sd > 0.35 && t >= 7) risks.push(`élasticité encore incertaine (±${f2(el.sd)})`);
+    emit('anticiper', `Prévision 7 j : ${forecast.map((f) => f.mean.toFixed(0)).join(' · ')} clients (pic ${DOW_NAMES[peak.t % 7]}). Opportunité : ${eur(opportunity)}/jour en ré-optimisant (prix ${f2(freeOpt.price)} €, marketing ${freeOpt.marketing} €).${risks.length ? ' Risques : ' + risks.join(' ; ') + '.' : ''}`,
+      { forecast, opportunity, freeOpt, curEv: curEv.profit, risks });
+
+    // PRIORISER : valeur de l'information (EVPI) vs exploitation
+    const S = 12, mOpt = freeOpt;
+    let evpi = 0;
+    const samples = [];
+    for (let i = 0; i < S; i++) {
+      const smp = A.model.sample(rng);
+      samples.push(smp);
+      const tp = thetaPredictor(smp.theta, smp.sigma, t);
+      const best = optimize(tp, ctx.cost, 0, (p, m) => m <= A.rules.marketingCap);
+      const ref = tp(mOpt.price, mOpt.marketing);
+      const refQ = newsvendorQ(ref.mu, ref.s, mOpt.price, ctx.cost, 0);
+      evpi += best.profit - expectedProfit(ref.mu, ref.s, mOpt.price, mOpt.marketing, ctx.cost, refQ).profit;
+    }
+    evpi /= S;
+    const remaining = Math.max(0, HORIZON - t);
+    const agenda = [
+      { key: 'exploit', label: 'Optimiser prix & stock', impact: Math.max(0, opportunity), urgency: opportunity > 20 ? 1 : 0.4 },
+      { key: 'explore', label: 'Expérimenter pour apprendre (valeur de l’information)', impact: evpi * Math.min(remaining, 60) / 10, urgency: el.sd > 0.3 ? 0.9 : 0.3 },
+      { key: 'protect', label: 'Protéger la trésorerie', impact: curEv.profit < 0 ? -curEv.profit : 0, urgency: curEv.profit < 0 ? 1 : 0 },
+    ].map((x) => ({ ...x, score: x.impact * (0.5 + x.urgency) })).sort((a, b) => b.score - a.score);
+    A.agenda = agenda;
+    const experimenting = A.experimentUntil != null && t <= A.experimentUntil;
+    if (experimenting) agenda.unshift({ key: 'experiment', label: 'Expérience discriminante en cours (trancher entre hypothèses)', impact: evpi * 10, urgency: 1, score: Infinity });
+    const mode = experimenting ? 'experiment' : agenda[0].key === 'explore' && evpi > 1 ? 'explore' : 'exploit';
+    emit('prioriser', `Priorités : ${agenda.map((a, i) => `${i + 1}. ${a.label}${Number.isFinite(a.score) ? ` (score ${a.score.toFixed(0)})` : ''}`).join(' · ')}. EVPI ≈ ${evpi.toFixed(1)} €/jour → mode ${mode === 'explore' ? 'EXPLORATION (Thompson)' : mode === 'experiment' ? 'EXPÉRIENCE (prix alterné ±8 %)' : 'EXPLOITATION'}.`,
+      { agenda, evpi, mode });
+
+    // DÉCIDER : agent CEO
+    const R = A.rules;
+    const refPrice = last ? last.price : P_REF;
+    const step = mode === 'experiment' ? Math.max(R.maxStep, 0.18) : R.maxStep;
+    const within = (p, m) => Math.abs(p / refPrice - 1) <= step + 1e-9 && m <= R.marketingCap;
+    let proposal, strategic = false;
+    const decisionPred = mode === 'explore' ? thetaPredictor(samples[0].theta, samples[0].sigma, t) : pred;
+    const routine = optimize(decisionPred, ctx.cost, A.skills.order.delta, within);
+    const bold = optimize(decisionPred, ctx.cost, A.skills.order.delta, (p, m) => m <= R.marketingCap);
+    // la quantité est toujours recalculée avec la prédictive complète (prudence)
+    const finalize = (a) => { const pp = pred(a.price, a.marketing); const q = newsvendorQ(pp.mu, pp.s, a.price, ctx.cost, A.skills.order.delta); return { price: a.price, marketing: a.marketing, order: q, expProfit: expectedProfit(pp.mu, pp.s, a.price, a.marketing, ctx.cost, q).profit }; };
+    let rA = finalize(routine);
+    const bA = finalize(bold);
+    if (mode === 'experiment') {
+      // plan expérimental : alterner autour de l'optimum pour faire apparaître l'élasticité
+      const sign = t % 2 === 0 ? 1 : -1;
+      const target = Math.round(routine.price * (1 + 0.08 * sign) * 10) / 10;
+      rA = finalize({ price: Math.min(6, Math.max(1.5, target)), marketing: routine.marketing });
+    }
+    let dithered = false;
+    if (t >= 7 && bA.expProfit - rA.expProfit > 15 && mode === 'exploit') { proposal = bA; strategic = true; } else proposal = rA;
+    if (mode === 'exploit' && !strategic && t >= WARMUP && o.vigilance) {
+      // vigilance : petite variation de prix alternée autour de l'optimum, pour que tout
+      // changement de sensibilité au prix reste observable (coût ≈ courbure du profit, faible)
+      const sign = t % 2 === 0 ? 1 : -1;
+      const target = Math.round(proposal.price * (1 + DITHER * sign) * 20) / 20;
+      const cand = finalize({ price: Math.min(6, Math.max(1.5, target)), marketing: proposal.marketing });
+      if (proposal.expProfit - cand.expProfit < 6) { proposal = cand; dithered = true; }
+    }
+    emit('decider', `Agent CEO : ${strategic ? 'DÉCISION STRATÉGIQUE — ' : ''}prix ${f2(proposal.price)} €${last ? ` (${pct(proposal.price / last.price - 1)})` : ''}, marketing ${proposal.marketing} €, commande ${proposal.order} unités. Profit espéré ${eur(proposal.expProfit)}.${dithered ? ` Variation de vigilance ±${DITHER * 100} % (pour garder la sensibilité-prix observable).` : ''}${strategic ? ` Dépasse la règle de pas maximal (±${(R.maxStep * 100).toFixed(0)} %) car +${eur(bA.expProfit - rA.expProfit)}/jour espérés.` : ''}`,
+      { proposal, strategic, mode });
+
+    // SIMULER : bac à sable Monte-Carlo sur la postérieure + Agent Risque
+    const fallback = finalize({ price: refPrice, marketing: Math.min(last?.marketing ?? 0, R.marketingCap) });
+    const sim = (a) => sandbox(a, t, ctx.cost, 240);
+    const sp = sim(proposal), sf = sim(fallback);
+    const [lo, hi] = priceRange();
+    const extrap = proposal.price < lo ? lo / proposal.price - 1 : proposal.price > hi ? proposal.price / hi - 1 : 0;
+    const reasons = [];
+    // risque RELATIF : la proposition ne doit pas être nettement plus dangereuse que le statu quo
+    const lossBar = Math.max(R.pLossMax, sf.pLoss + 0.1);
+    if (sp.pLoss > lossBar) reasons.push(`P(perte) ${(sp.pLoss * 100).toFixed(0)} % > seuil ${(lossBar * 100).toFixed(0)} %`);
+    if (sp.cvar5 < sf.cvar5 - 60) reasons.push(`pire cas (CVaR 5 %) dégradé de ${eur(sf.cvar5 - sp.cvar5)}`);
+    if (extrap > 0.2) reasons.push(`prix hors du domaine déjà observé (${pct(extrap)} au-delà)`);
+    if (!triedMarketing().has(proposal.marketing)) reasons.push(`niveau de marketing jamais testé (${proposal.marketing} €)`);
+    if (mode === 'experiment' && Math.abs(proposal.price / refPrice - 1) > R.maxStep + 1e-9) { /* expérience planifiée : pas de revue pour la variation contrôlée */ }
+    if (strategic) reasons.push(`variation de prix au-delà de la règle (±${(R.maxStep * 100).toFixed(0)} %)`);
+    const risk = reasons.length ? 'élevé' : 'faible';
+    emit('simuler', `Bac à sable (240 mondes tirés de ma postérieure) : profit médian ${eur(sp.p50)}, P5 ${eur(sp.p5)}, P(perte) ${(sp.pLoss * 100).toFixed(0)} %. Statu quo : ${eur(sf.mean)}. Agent Risque : risque ${risk.toUpperCase()}${reasons.length ? ' — ' + reasons.join(' ; ') : ''}.`,
+      { sim: sp, simFallback: sf, risk, reasons, hist: sp.hist });
+
+    if (risk === 'faible') return execute(proposal, 'auto');
+    const voi = Math.max(0, agenda.find((x) => x.key === 'explore').impact);
+    A.pending = { proposal, fallback, sim: sp, simFallback: sf, reasons, t, mode, voi, evpi };
+    emit('revue', `Validation humaine requise : ${reasons.join(' ; ')}. Coût espéré vs statu quo : ${eur(sf.mean - sp.mean)} ; valeur de l’information estimée : ${eur(voi)}.`, { pending: true, proposal, fallback, sim: sp, simFallback: sf, reasons, voi });
+    return { review: A.pending, trace: trace.slice() };
+  }
+
+  function sandbox(a, t, cost, S) {
+    const profits = new Float64Array(S);
+    const r = dayRec(t, a.price, a.marketing);
+    const x = features(r, A.beliefs);
+    for (let i = 0; i < S; i++) {
+      const smp = A.model.sample(rng);
+      const D = Math.exp(dot(x, smp.theta) + smp.sigma * A.kappa * rng.normal());
+      const sales = Math.min(Math.round(D), a.order);
+      profits[i] = a.price * sales - cost * a.order - a.marketing - FIXED_COST;
+    }
+    const sorted = Array.from(profits).sort((u, v) => u - v);
+    const q = (p) => sorted[Math.min(S - 1, Math.floor(p * S))];
+    const mean = sorted.reduce((s, v) => s + v, 0) / S;
+    const pLoss = sorted.filter((v) => v < 0).length / S;
+    const k5 = Math.max(1, Math.floor(0.05 * S));
+    const cvar5 = sorted.slice(0, k5).reduce((s, v) => s + v, 0) / k5;
+    const bins = 20, mn = sorted[0], mx = sorted[S - 1], w = (mx - mn) / bins || 1;
+    const hist = new Array(bins).fill(0); for (const v of sorted) hist[Math.min(bins - 1, Math.floor((v - mn) / w))]++;
+    return { mean, p5: q(0.05), p50: q(0.5), p95: q(0.95), pLoss, cvar5, hist: { min: mn, max: mx, counts: hist } };
+  }
+
+  function execute(action, how) {
+    A.pending = null;
+    const pp = A.model.predict(dayRec(A.today.t, action.price, action.marketing));
+    A.today.action = { price: action.price, marketing: action.marketing, order: action.order };
+    A.today.pred = { mu: pp.mu, s: pp.scale * A.kappa, expProfit: action.expProfit };
+    A.today.how = how;
+    emit('executer', `Exécution${how === 'human' ? ' (validée par l’humain)' : how === 'fallback' ? ' du plan de repli (proposition refusée)' : how === 'sim-reviewer' ? ' (validée par le relecteur simulé)' : ' autonome'} : prix ${f2(action.price)} €, marketing ${action.marketing} €, commande ${action.order}.`, { action: A.today.action, how });
+    return { action: A.today.action, trace: trace.slice() };
+  }
+
+  // Décision humaine : 'approve' | 'reject'
+  function resolveReview(decision, by = 'human') {
+    const P = A.pending; if (!P) throw new Error('aucune revue en attente');
+    const last = A.records[A.records.length - 1];
+    if (decision === 'approve') {
+      R_learn('approve', P, last);
+      return execute(P.proposal, by);
+    }
+    R_learn('reject', P, last);
+    // plan de repli : statu quo, borné par les règles
+    return execute(P.fallback, 'fallback');
+  }
+
+  function R_learn(decision, P, last) {
+    if (!o.learning) return;
+    const R = A.rules;
+    if (decision === 'approve') {
+      R.approvals++;
+      if (R.approvals % 3 === 0 && R.rejections === 0 && R.pLossMax < 0.45) {
+        R.pLossMax = +(R.pLossMax + 0.05).toFixed(2);
+        R.list.push({ t: P.t, text: `Confiance accordée après ${R.approvals} validations : tolérance P(perte) portée à ${(R.pLossMax * 100).toFixed(0)} %.` });
+      }
+    } else {
+      R.rejections++; R.lastRejection = P.t;
+      const dp = last ? Math.abs(P.proposal.price / last.price - 1) : 0;
+      if (dp > 0.05) {
+        R.maxStep = Math.max(0.05, +Math.min(R.maxStep, dp * 0.7).toFixed(2));
+        R.list.push({ t: P.t, text: `Refus d’une variation de prix de ${(dp * 100).toFixed(0)} % → règle : ne pas varier de plus de ±${(R.maxStep * 100).toFixed(0)} %/jour sans validation.` });
+      }
+      if (P.proposal.marketing > (last?.marketing ?? 0)) {
+        const lower = MARKETING_LEVELS.filter((m) => m < P.proposal.marketing);
+        R.marketingCap = lower[lower.length - 1] ?? 0;
+        R.list.push({ t: P.t, text: `Refus d’un marketing à ${P.proposal.marketing} € → règle : plafond marketing ${R.marketingCap} €/jour.` });
+      }
+      R.pLossMax = Math.max(0.15, +(R.pLossMax - 0.05).toFixed(2));
+    }
+  }
+
+  // ---------- SOIR ----------
+  function observeOutcome(obs) {
+    trace.length = 0;
+    const t = obs.t;
+    const y = Math.log(Math.max(obs.sales, 0.5));
+    const rec = { t, dow: obs.dow, price: obs.price, marketing: obs.marketing, order: obs.order, cost: obs.cost, sales: obs.sales, censored: obs.censored, profit: obs.profit, y };
+    const pr = A.today?.pred;
+    // rupture : la demande réelle est ≥ stock → imputation par l'espérance de la loi tronquée.
+    if (obs.censored) impute(rec, A.model);
+
+    // MESURER
+    A.kpi.cumProfit += obs.profit; A.kpi.days++;
+    let z = null, inside = null;
+    if (pr) {
+      z = (y - pr.mu) / pr.s;
+      inside = Math.abs(z) <= Z80;
+      rec.pred = { mu: pr.mu, s: pr.s, expProfit: pr.expProfit }; rec.z = z; rec.inside = obs.censored ? null : inside;
+    }
+    const recent = A.records.slice(-27).concat([rec]);
+    const cov = recent.filter((r) => r.inside != null);
+    const coverage = cov.length ? cov.filter((r) => r.inside).length / cov.length : null;
+    const unc = recent.filter((r) => !r.censored && r.pred);
+    rec.coverageFlag = inside;
+    const mape = unc.length ? unc.reduce((s, r) => s + Math.abs(r.sales - Math.exp(r.pred.mu)) / Math.max(1, r.sales), 0) / unc.length : null;
+    const stockoutRate = recent.filter((r) => r.censored).length / recent.length;
+    emit('mesurer', `Résultat : ${obs.sales}/${obs.order} vendus${obs.censored ? ' (rupture)' : `, ${obs.order - obs.sales} invendus`}, profit ${eur(obs.profit)} (espéré ${pr ? eur(pr.expProfit) : '—'}). Écart de prévision z=${z == null ? '—' : f2(z)}. KPI 28 j : couverture IC80 ${coverage == null ? '—' : (coverage * 100).toFixed(0) + ' %'}, erreur ${mape == null ? '—' : (mape * 100).toFixed(0) + ' %'}, ruptures ${(stockoutRate * 100).toFixed(0)} %.`,
+      { profit: obs.profit, z, coverage, mape, stockoutRate, cumProfit: A.kpi.cumProfit });
+
+    // CONFRONTATION préparée pour demain (CUSUM sur les écarts standardisés)
+    if (z != null && t >= WARMUP - 1) {
+      let zc = Math.max(-6, Math.min(6, z));
+      // rupture : on ne voit pas la demande au-delà du stock. Sous le modèle, l'écart attendu
+      // sachant "demande ≥ stock" est l'espérance tronquée λ(a) = φ(a)/(1−Φ(a)) : c'est une preuve
+      // (modeste) de demande plus forte que prévu. Une série de ruptures finit donc par alerter.
+      if (obs.censored) { const a = zc; zc = Math.max(a, Math.exp(-0.5 * a * a) / Math.sqrt(2 * Math.PI) / Math.max(1e-9, 1 - normCdf(a))); }
+      A.cusum.pos = Math.max(0, A.cusum.pos + zc - CUSUM_K);
+      A.cusum.neg = obs.censored ? A.cusum.neg : Math.max(0, A.cusum.neg - zc - CUSUM_K);
+      A.lastZ = z;
+      // second détecteur : l'erreur est-elle corrélée au prix ? (statistique de score d'un changement d'élasticité)
+      const win = A.records.slice(-28).map((r) => Math.log(r.price));
+      if (win.length >= 14 && !obs.censored) {
+        const m = win.reduce((s, v) => s + v, 0) / win.length;
+        const sdp = Math.sqrt(win.reduce((s, v) => s + (v - m) ** 2, 0) / win.length);
+        if (sdp > 0.02) {
+          const u = Math.max(-2, Math.min(2, (Math.log(obs.price) - m) / sdp));
+          const sc = Math.max(-4, Math.min(4, zc * u));
+          A.ecusum.pos = Math.max(0, A.ecusum.pos + sc - ECUSUM_K);
+          A.ecusum.neg = Math.max(0, A.ecusum.neg - sc - ECUSUM_K);
+        }
+      }
+    }
+
+    // APPRENDRE : mémoire épisodique + compétence de commande
+    A.memory.push({ t, action: A.today?.action, how: A.today?.how, pred: pr, outcome: { sales: obs.sales, profit: obs.profit, censored: obs.censored } });
+    let learnText = `Épisode ${t} mémorisé (${A.memory.length} au total).`;
+    if (o.learning && A.records.length >= 27 && t % 7 === 3) {
+      const cr = obs.price > obs.cost ? (obs.price - obs.cost) / obs.price : 0.5;
+      const target = 1 - cr;
+      const gap = stockoutRate - target;
+      if (Math.abs(gap) > 0.08) {
+        const sk = A.skills.order;
+        const old = sk.delta;
+        sk.delta = Math.max(-0.5, Math.min(0.5, sk.delta + 0.3 * gap));
+        sk.version++;
+        const note = `v${sk.version} : ruptures ${(stockoutRate * 100).toFixed(0)} % vs cible ${(target * 100).toFixed(0)} % → décalage de commande ${f2(old)} → ${f2(sk.delta)} σ.`;
+        sk.notes.push({ t, text: note });
+        learnText += ` Compétence « ${sk.name} » ${note}`;
+      }
+    }
+    emit('apprendre', learnText, { skills: A.skills, rules: A.rules });
+
+    // RÉVISER : mise à jour bayésienne du modèle
+    A.records.push(rec);
+    const before = elasticityNow(t + 1).est, lvlBefore = levelNow(t + 1);
+    refit();
+    const after = elasticityNow(t + 1).est, lvlAfter = levelNow(t + 1);
+    emit('reviser', `Postérieure mise à jour avec ${A.model.n} observations (dont ruptures imputées) : niveau ${lvlBefore.toFixed(0)} → ${lvlAfter.toFixed(0)}, élasticité ${f2(before)} → ${f2(after)}.`, { level: lvlAfter, elasticity: after });
+
+    // DREAMING : chaque fin de semaine
+    if (o.dreaming && t % 7 === 6 && t >= WARMUP) dream(t, coverage);
+    return { trace: trace.slice() };
+  }
+
+  function dream(t, coverage) {
+    const notes = [];
+    const data = trainingSet();
+    // 1. Audit des croyances : chaque rupture est-elle encore justifiée ? Date affinée ?
+    if (o.hypotheses) {
+      for (const b of [...A.beliefs]) {
+        const others = A.beliefs.filter((x) => x !== b);
+        const without = fit(data, others).logML;
+        let bestTau = b.tau, bestML = fit(data, A.beliefs).logML;
+        for (let tau = Math.max(WARMUP, b.tau - 10); tau <= Math.min(t - 2, b.tau + 10); tau++) {
+          if (tau === b.tau || (b.end != null && tau >= b.end - 2)) continue;
+          const m = fit(data, A.beliefs.map((x) => (x === b ? { ...x, tau } : x))).logML;
+          if (m > bestML + 1) { bestML = m; bestTau = tau; }
+        }
+        if (bestTau !== b.tau) { notes.push(`date de la rupture #${b.id} affinée : jour ${b.tau} → ${bestTau}`); b.tau = bestTau; }
+        // requalification : une autre nature de changement explique-t-elle mieux les faits ?
+        if (b.type !== 'end' && t - b.acceptedAt >= 5) {
+          for (const alt of ['level', 'elasticity', 'marketing']) {
+            if (alt === b.type) continue;
+            const m = fit(data, A.beliefs.map((x) => (x === b ? { ...x, type: alt } : x))).logML;
+            if (m > bestML + 2) {
+              notes.push(`croyance #${b.id} REQUALIFIÉE : ${TYPE_FR[b.type]} → ${TYPE_FR[alt]} (log BF ${f2(m - bestML)})`);
+              b.type = alt; bestML = m; b.provisional = false;
+            }
+          }
+          if (b.provisional && t - b.acceptedAt >= 14) { b.provisional = false; notes.push(`croyance #${b.id} confirmée après expérience (${TYPE_FR[b.type]})`); }
+        }
+        const logBF = bestML - without;
+        b.logBF = logBF;
+        if (logBF < 0) {
+          A.beliefs = A.beliefs.filter((x) => x !== b);
+          A.retracted.push({ ...b, retractedAt: t });
+          notes.push(`croyance #${b.id} (${b.type}, jour ${b.tau}) RÉTRACTÉE : les données ne la soutiennent plus (log BF ${f2(logBF)})`);
+        }
+      }
+      refit();
+      A.beliefs.forEach((b, i) => { b.coef = A.model.mn[9 + i]; b.narrative = narrate(b) + (b.end != null ? ` Effet terminé au jour ${b.end}.` : ''); });
+    }
+    // 1b. Les règles apprises ne sont pas des dogmes : sans refus depuis 4 semaines, on les assouplit.
+    if (o.learning) {
+      const R = A.rules;
+      if (R.lastRejection == null || t - R.lastRejection >= 28) {
+        const changes = [];
+        if (R.maxStep < 0.15) { R.maxStep = Math.min(0.15, +(R.maxStep + 0.02).toFixed(2)); changes.push(`pas max ±${(R.maxStep * 100).toFixed(0)} %`); }
+        if (R.marketingCap < 100) { R.marketingCap = MARKETING_LEVELS[MARKETING_LEVELS.indexOf(R.marketingCap) + 1]; changes.push(`plafond marketing ${R.marketingCap} €`); }
+        if (R.pLossMax < 0.3) { R.pLossMax = +(R.pLossMax + 0.05).toFixed(2); changes.push(`tolérance perte ${(R.pLossMax * 100).toFixed(0)} %`); }
+        if (changes.length) { R.list.push({ t, text: `4 semaines sans refus → règles assouplies : ${changes.join(', ')}.` }); notes.push(`règles assouplies (${changes.join(', ')})`); R.lastRejection = t; }
+      }
+    }
+    // 2. Auto-audit de calibration
+    if (coverage != null && o.learning) {
+      const old = A.kappa;
+      if (coverage < 0.7) A.kappa = Math.min(2.5, A.kappa * 1.15);
+      else if (coverage > 0.9) A.kappa = Math.max(0.8, A.kappa / 1.1);
+      if (A.kappa !== old) notes.push(`calibration : couverture IC80 = ${(coverage * 100).toFixed(0)} % → facteur d’humilité κ ${f2(old)} → ${f2(A.kappa)}`);
+      else notes.push(`calibration correcte (couverture IC80 ${(coverage * 100).toFixed(0)} %)`);
+    }
+    // 3. Contrefactuel : avec ce que je sais maintenant, qu'aurais-je dû faire cette semaine ?
+    let regret = 0, bestP = null;
+    for (const r of A.records.slice(-7)) {
+      const pred = predictor(A.model, r.t);
+      const best = optimize(pred, r.cost, A.skills.order.delta);
+      const pp = pred(r.price, r.marketing);
+      const did = expectedProfit(pp.mu, pp.s, r.price, r.marketing, r.cost, r.order).profit;
+      regret += Math.max(0, best.profit - did); bestP = best;
+    }
+    notes.push(`contrefactuel : avec mes connaissances actuelles, j’aurais pu gagner ~${eur(regret)} de plus cette semaine (prix idéal ≈ ${f2(bestP.price)} €, marketing ${bestP.marketing} €)`);
+    // 4. Anticipation de la semaine à venir
+    const el = elasticityNow(t + 1);
+    notes.push(`semaine prochaine : élasticité ${f2(el.est)} ± ${f2(el.sd)}, ${A.beliefs.length} rupture(s) active(s), règles : pas max ±${(A.rules.maxStep * 100).toFixed(0)} %, tolérance perte ${(A.rules.pLossMax * 100).toFixed(0)} %`);
+    A.insights.push({ t, regret, notes });
+    emit('dreaming', `Nuit de rêve (auto-audit) : ${notes.join(' · ')}.`, { notes, regret, kappa: A.kappa });
+  }
+
+  A.planDay = planDay;
+  A.resolveReview = resolveReview;
+  A.observeOutcome = observeOutcome;
+  A.elasticityNow = elasticityNow;
+  A.levelNow = levelNow;
+  A.predictor = (t) => predictor(A.model, t);
+  return A;
+}
+
+// ---- src/policies.js ----
+// Politiques de référence pour mesurer honnêtement la valeur de CORTEX.
+
+
+
+// L'oracle connaît la vérité cachée (paramètres, événements, bruit σ) : borne supérieure.
+function createOracle(world) {
+  return {
+    name: 'Oracle (connaît la vérité cachée)',
+    act(t) {
+      const sigma = world.scenario.noise;
+      return optimize((p, m) => ({ mu: world.logRate(t, p, m), s: sigma }), world.cost(t));
+    },
+    observe() {},
+  };
+}
+
+// L'habitude : prix fixe 4 €, pas de marketing, commande = moyenne des ventes récentes + 10 %.
+function createHabit() {
+  const hist = [];
+  return {
+    name: 'Habitude (prix fixe, stock moyen)',
+    act() { const r = hist.slice(-7); const m = r.length ? r.reduce((s, x) => s + x, 0) / r.length : 120; return { price: 4, marketing: 0, order: Math.round(m * 1.1) }; },
+    observe(o) { hist.push(o.sales); },
+  };
+}
+
+const _unused = DOW_LOG;
+
+// ---- src/runner.js ----
+// Orchestration d'une journée : matin (planification) → le monde vit → soir (bilan).
+
+
+
+
+// Relecteur simulé (utilisé quand aucun humain n'est présent) : approuve si la proposition
+// bat le statu quo en espérance sans risque de perte excessif. Clairement étiqueté comme simulé.
+const simulatedReviewer = (review) => {
+  const cost = review.simFallback.mean - review.sim.mean; // ce que la proposition coûte en espérance
+  return cost <= Math.max(5, review.voi ?? 0) && review.sim.pLoss <= 0.5 ? 'approve' : 'reject';
+};
+
+const publicObs = (o) => { const { _demand, ...rest } = o; return rest; };
+
+function agentDay(world, agent, reviewer = simulatedReviewer) {
+  const t = world.t;
+  const plan = agent.planDay({ t, cost: world.cost(t) });
+  let res = plan, reviewed = null;
+  if (plan.review) {
+    const d = reviewer(plan.review);
+    reviewed = d;
+    res = agent.resolveReview(d, 'sim-reviewer'); // sa trace inclut déjà celle du matin
+  }
+  const obs = world.step(res.action);
+  const ev = agent.observeOutcome(publicObs(obs));
+  return { obs, trace: res.trace.concat(ev.trace), reviewed };
+}
+
+function policyDay(world, pol) {
+  const a = pol.act(world.t);
+  const obs = world.step(a);
+  pol.observe(publicObs(obs));
+  return obs;
+}
+
+function runEpisode({ seed = 1, days = 365, agentOpts = {}, policy = null, reviewer } = {}) {
+  const world = createWorld(seed);
+  const log = [];
+  if (policy) {
+    const pol = policy === 'oracle' ? createOracle(world) : createHabit();
+    for (let d = 0; d < days; d++) log.push(policyDay(world, pol));
+    return { world, log, profit: log.reduce((s, o) => s + o.profit, 0) };
+  }
+  const agent = createAgent({ seed, ...agentOpts });
+  let reviews = 0, approvals = 0;
+  for (let d = 0; d < days; d++) {
+    const r = agentDay(world, agent, reviewer);
+    if (r.reviewed) { reviews++; if (r.reviewed === 'approve') approvals++; }
+    log.push(r.obs);
+  }
+  return { world, agent, log, profit: log.reduce((s, o) => s + o.profit, 0), reviews, approvals };
+}
+
+</script>
+<script>
+// Interface de CORTEX — pilote le moteur réel (mêmes fichiers que les tests et le banc d'essai).
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const STAGE_LABEL = Object.fromEntries(STAGES);
+  const euro = (x) => `${x < 0 ? '−' : ''}${Math.abs(Math.round(x)).toLocaleString('fr-FR')} €`;
+  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+  let S = null, playing = false, timer = null, reviewer = 'human', showTruth = false, waiting = null;
+
+  function newYear(seed, prerun = 0) {
+    S = { seed, world: createWorld(seed), agent: createAgent({ seed }), ow: createWorld(seed), hw: createWorld(seed), habit: createHabit(),
+      log: [], olog: [], hlog: [], cum: [], ocum: [], hcum: [], trace: [], reviews: { ok: 0, no: 0 }, injected: [] };
+    S.oracle = createOracle(S.ow);
+    waiting = null; $('review').hidden = true;
+    for (let i = 0; i < prerun; i++) dayAuto(true);
+    renderAll();
+  }
+
+  // ----- une journée -----
+  function startDay() {
+    if (S.world.t >= HORIZON) { stop(); return 'end'; }
+    const t = S.world.t;
+    const plan = S.agent.planDay({ t, cost: S.world.cost(t) });
+    if (plan.review) {
+      if (reviewer === 'human') { waiting = plan; openReview(plan); return 'wait'; }
+      const d = simulatedReviewer(plan.review);
+      d === 'approve' ? S.reviews.ok++ : S.reviews.no++;
+      return finishDay(S.agent.resolveReview(d, 'sim-reviewer'));
+    }
+    return finishDay(plan);
+  }
+  function dayAuto() { const prev = reviewer; reviewer = 'sim'; startDay(); reviewer = prev; }
+  function finishDay(res) {
+    const t = S.world.t;
+    const obs = S.world.step(res.action);
+    const ev = S.agent.observeOutcome(publicObs(obs));
+    S.log.push(obs);
+    const oo = S.ow.step(S.oracle.act(t)); S.olog.push(oo);
+    const ho = policyDay(S.hw, S.habit); S.hlog.push(ho);
+    const last = (a) => (a.length ? a[a.length - 1] : 0);
+    S.cum.push(last(S.cum) + obs.profit); S.ocum.push(last(S.ocum) + oo.profit); S.hcum.push(last(S.hcum) + ho.profit);
+    S.trace = res.trace.concat(ev.trace);
+    return 'ok';
+  }
+
+  // ----- lecture -----
+  const SPEED = { slow: 1600, normal: 220, fast: 0 };
+  function tick() {
+    if (!playing) return;
+    const sp = $('speed').value;
+    const n = sp === 'fast' ? 6 : 1;
+    let r = 'ok';
+    for (let i = 0; i < n && r === 'ok'; i++) r = startDay();
+    renderAll(sp === 'slow');
+    if (r === 'wait') { setPlaying(false); return; }
+    if (r === 'end') return;
+    timer = setTimeout(tick, SPEED[sp] || 16);
+  }
+  function setPlaying(v) { playing = v; $('play').textContent = v ? '⏸ Pause' : '▶ Lancer'; if (v) tick(); else clearTimeout(timer); }
+  const stop = () => setPlaying(false);
+
+  // ----- revue humaine -----
+  function openReview(plan) {
+    const R = plan.review;
+    $('rv-eyebrow').textContent = `Revue humaine · jour ${R.t}`;
+    $('rv-reasons').innerHTML = R.reasons.map((x) => `<li>${esc(x)}</li>`).join('');
+    const row = (a, s) => `<tr><td>Prix</td><td>${a.price.toFixed(2)} €</td></tr><tr><td>Marketing</td><td>${a.marketing} €/j</td></tr><tr><td>Commande</td><td>${a.order} u.</td></tr><tr><td>Profit moyen simulé</td><td>${euro(s.mean)}</td></tr><tr><td>Pire 5 %</td><td>${euro(s.p5)}</td></tr><tr><td>P(perte)</td><td>${Math.round(s.pLoss * 100)} %</td></tr>`;
+    $('rv-prop').innerHTML = row(R.proposal, R.sim);
+    $('rv-fall').innerHTML = row(R.fallback, R.simFallback);
+    const cost = R.simFallback.mean - R.sim.mean;
+    $('rv-voi').textContent = cost > 0
+      ? `En espérance, la proposition coûte ${euro(cost)} de plus que le statu quo aujourd'hui. L'agent estime la valeur de ce qu'il apprendrait à ${euro(R.voi)}. Le relecteur simulé approuverait ${simulatedReviewer(R) === 'approve' ? 'oui' : 'non'}.`
+      : `En espérance, la proposition rapporte ${euro(-cost)} de plus que le statu quo. Le relecteur simulé approuverait ${simulatedReviewer(R) === 'approve' ? 'oui' : 'non'}.`;
+    $('review').hidden = false;
+    drawHist(R.sim.hist);
+    renderAll();
+    $('rv-approve').focus();
+  }
+  function decide(d) {
+    if (!waiting) return;
+    d === 'approve' ? S.reviews.ok++ : S.reviews.no++;
+    waiting = null; $('review').hidden = true;
+    finishDay(S.agent.resolveReview(d, 'human'));
+    renderAll(true);
+  }
+
+  // ----- événements provoqués -----
+  function inject(kind) {
+    const t = S.world.t;
+    const e = {
+      rival: { type: 'level', start: t, end: null, mag: Math.log(0.7), label: 'Un 2ᵉ concurrent ouvre (provoqué par vous)' },
+      viral: { type: 'level', start: t, end: t + 21, mag: Math.log(1.6), label: 'Passage à la télé, 3 semaines (provoqué par vous)' },
+      elas: { type: 'elasticity', start: t, mag: -0.8, label: 'Crise du pouvoir d’achat : clients plus sensibles au prix (provoqué par vous)' },
+      cost: { type: 'cost', start: t, value: +(S.world.cost(t) * 1.4).toFixed(2), label: 'Hausse du beurre, coût +40 % (provoqué par vous)' },
+    }[kind];
+    for (const w of [S.world, S.ow, S.hw]) w.inject(e);
+    S.injected.push(e);
+    renderAll();
+  }
+
+  // ----- rendu -----
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  function renderAll(animate) {
+    const A = S.agent, t = S.world.t;
+    $('k-day').textContent = t;
+    $('k-dow').textContent = `${t > 0 ? DOW_NAMES[(t - 1) % 7] + ' · ' : ''}sur ${HORIZON}`;
+    const c = S.cum.at(-1) ?? 0, oc = S.ocum.at(-1) ?? 0, hc = S.hcum.at(-1) ?? 0;
+    $('k-profit').textContent = euro(c);
+    $('k-pct').textContent = oc > 0 ? `${Math.round((c / oc) * 100)} % de l'oracle · ${c >= hc ? '+' : '−'}${euro(Math.abs(c - hc))} vs habitude` : '—';
+    $('k-ref').textContent = euro(oc); $('k-ref-s').textContent = `habitude : ${euro(hc)} · mêmes aléas`;
+    $('k-bel').textContent = A.beliefs.length;
+    $('k-bel-s').textContent = `${A.retracted.length} rétractée(s) · ${A.hypothesisLog.length} enquête(s)`;
+    $('k-rev').textContent = S.reviews.ok + S.reviews.no;
+    $('k-rev-s').textContent = `${S.reviews.ok} validée(s) / ${S.reviews.no} refusée(s)`;
+    const mes = [...S.trace].reverse().find((e) => e.stage === 'mesurer');
+    $('k-cal').textContent = mes?.data.coverage != null ? `${Math.round(mes.data.coverage * 100)} %` : '—';
+    $('k-cal-s').textContent = `cible 80 % · humilité κ = ${A.kappa.toFixed(2)}`;
+    renderRing(animate);
+    renderJournal();
+    renderBeliefs();
+    renderHyps();
+    renderLearning();
+    renderTruth();
+    drawDemand(); drawPrice(); drawProfit();
+  }
+
+  // anneau de la boucle
+  const ringPos = STAGES.map((_, i) => { const a = -Math.PI / 2 + (i / STAGES.length) * 2 * Math.PI; return [170 + 118 * Math.cos(a), 170 + 118 * Math.sin(a), a]; });
+  function buildRing() {
+    const svg = $('ring');
+    let h = '';
+    for (let i = 0; i < STAGES.length; i++) {
+      const [x1, y1] = ringPos[i], [x2, y2] = ringPos[(i + 1) % STAGES.length];
+      h += `<path class="edge" id="e-${i}" d="M${x1.toFixed(1)},${y1.toFixed(1)} A118,118 0 0 1 ${x2.toFixed(1)},${y2.toFixed(1)}"/>`;
+    }
+    STAGES.forEach(([k, label], i) => {
+      const [x, y, a] = ringPos[i];
+      const lx = 170 + 146 * Math.cos(a), ly = 170 + 146 * Math.sin(a);
+      const anchor = Math.abs(Math.cos(a)) < 0.25 ? 'middle' : Math.cos(a) > 0 ? 'start' : 'end';
+      h += `<g class="n" id="n-${k}"><circle class="n-dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="8"/><text class="cnt" x="${x.toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="middle" id="c-${k}"></text>`
+        + `<text class="lbl" x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="${anchor}">${label}</text></g>`;
+    });
+    h += `<text class="center-t" x="170" y="164" text-anchor="middle" id="ring-c1">CORTEX</text><text class="center-s" x="170" y="182" text-anchor="middle" id="ring-c2"></text>`;
+    svg.innerHTML = h;
+  }
+  let ringAnim = null;
+  function renderRing(animate) {
+    const todays = [...new Set(S.trace.map((e) => e.stage))];
+    STAGES.forEach(([k], i) => {
+      const g = $(`n-${k}`); g.classList.toggle('today', todays.includes(k)); g.classList.remove('active');
+      $(`e-${i}`).classList.toggle('lit', todays.includes(k) && todays.includes(STAGES[(i + 1) % STAGES.length][0]));
+    });
+    $('ring-sub').textContent = `jour ${S.world.t} · ${S.trace.length} étapes aujourd'hui`;
+    $('ring-c2').textContent = waiting ? 'attend votre décision' : `${Object.values(S.agent.stageCount).reduce((a, b) => a + b, 0)} étapes au total`;
+    clearInterval(ringAnim);
+    const show = (e) => {
+      if (!e) return;
+      document.querySelectorAll('#ring .n.active').forEach((n) => n.classList.remove('active'));
+      $(`n-${e.stage}`).classList.add('active');
+      $('stage-now').innerHTML = `<b>${STAGE_LABEL[e.stage]}</b> — ${esc(e.text)}`;
+    };
+    const tr = waiting ? waiting.trace : S.trace;
+    if (animate && tr.length && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      let i = 0; show(tr[0]);
+      ringAnim = setInterval(() => { i++; if (i >= tr.length) { clearInterval(ringAnim); return; } show(tr[i]); }, Math.max(60, 1400 / tr.length));
+    } else show(tr.find((e) => e.stage === 'hypotheses') || tr.find((e) => e.stage === 'revue') || tr.find((e) => e.stage === 'dreaming') || tr.find((e) => e.stage === 'decider'));
+  }
+
+  function renderJournal() {
+    const tr = waiting ? waiting.trace : S.trace;
+    $('j-sub').textContent = tr.length ? `jour ${tr[0].t}` : '';
+    $('journal').innerHTML = tr.length ? tr.map((e) => {
+      const hot = ['hypotheses', 'revue', 'dreaming'].includes(e.stage) || (e.stage === 'confronter' && e.data.verdict === 'contradiction');
+      const contra = e.stage === 'confronter' && e.data.verdict === 'contradiction';
+      return `<div class="jline${hot ? ' hot' : ''}${contra ? ' contra' : ''}"><div class="st">${STAGE_LABEL[e.stage]}</div><div>${esc(e.text)}</div></div>`;
+    }).join('') : '<p class="empty">Lancez la simulation : chaque jour, le raisonnement complet de l’agent s’affiche ici.</p>';
+  }
+
+  function renderBeliefs() {
+    const A = S.agent;
+    const items = A.beliefs.map((b) => `<div class="belief${b.provisional ? ' prov' : ''}">${esc(b.narrative)}${b.provisional ? '<span class="pill warn">provisoire</span>' : ''}<span class="meta">admise au jour ${b.acceptedAt} · log BF ${b.logBF?.toFixed(1) ?? '—'}</span></div>`)
+      .concat(A.retracted.map((b) => `<div class="belief gone">${esc(b.narrative || b.type)}<span class="meta">rétractée au jour ${b.retractedAt} : les données ne la soutenaient plus</span></div>`));
+    $('beliefs').innerHTML = items.length ? items.join('') : `<p class="empty">Aucune rupture admise. Le monde paraît conforme au modèle de base : prix, jour de la semaine, marketing.</p>`;
+  }
+  const TYPE_LABEL = { level: 'rupture de niveau', elasticity: 'changement d’élasticité', marketing: 'effet marketing modifié', end: 'fin d’un effet temporaire' };
+  function renderHyps() {
+    const h = S.agent.hypothesisLog.at(-1);
+    if (!h) { $('hyps').innerHTML = '<p class="empty">Aucune contradiction pour l’instant. Les hypothèses ne sont générées que lorsque les faits contredisent la théorie.</p>'; $('hyp-sub').textContent = ''; return; }
+    $('hyp-sub').textContent = `jour ${h.t} · P(changement) ${Math.round(h.pChange * 100)} %`;
+    const rows = [{ label: 'rien n’a changé (bruit)', p: 1 - h.pChange }].concat(h.top.slice(0, 4).map((c) => ({ label: `${TYPE_LABEL[c.type]} au jour ${c.tau}`, p: c.post })));
+    $('hyps').innerHTML = rows.map((r) => `<div class="hbar"><div>${esc(r.label)}<div class="track"><div class="fill" style="width:${(r.p * 100).toFixed(1)}%"></div></div></div><div class="num">${(r.p * 100).toFixed(1)} %</div></div>`).join('')
+      + `<p class="note">${h.accepted ? `Retenue : ${TYPE_LABEL[h.accepted.type]} au jour ${h.accepted.tau}.` : 'Aucune hypothèse retenue : preuves insuffisantes.'} Probabilités a posteriori exactes (vraisemblance marginale) sur ${Object.keys(h.byType).length} familles d’explications.</p>`;
+  }
+  function renderLearning() {
+    const A = S.agent, sk = A.skills.order;
+    $('skills').textContent = `${sk.name} v${sk.version} — décalage appris ${sk.delta >= 0 ? '+' : ''}${sk.delta.toFixed(2)} σ. ${sk.notes.at(-1)?.text ?? 'Pas encore ajustée.'}`;
+    const rl = A.rules.list.slice(-4);
+    $('rules').innerHTML = rl.length ? rl.map((r) => `<li><span class="mono">j${r.t}</span> ${esc(r.text)}</li>`).join('') : `<li>Aucune règle pour l’instant. Règles actives : pas de prix ±${Math.round(A.rules.maxStep * 100)} %/jour, tolérance de perte ${Math.round(A.rules.pLossMax * 100)} %.</li>`;
+    const d = A.insights.at(-1);
+    $('dream').innerHTML = d ? d.notes.map((n) => `<li>${esc(n)}</li>`).join('') : '<li>Le premier rêve aura lieu dimanche soir, après la phase d’apprentissage (28 jours).</li>';
+  }
+  function renderTruth() {
+    $('truth-panel').hidden = !showTruth; $('lg-truth').hidden = !showTruth;
+    $('truth-btn').setAttribute('aria-pressed', String(showTruth));
+    $('truth-btn').textContent = showTruth ? 'Cacher la vérité' : 'Révéler la vérité cachée';
+    if (!showTruth) return;
+    const sc = S.world.scenario;
+    $('truth').innerHTML = `<li>Élasticité de base ${sc.beta.toFixed(2)}, effet marketing ${sc.gamma.toFixed(2)}, bruit ${sc.noise}</li>`
+      + sc.events.map((e) => `<li><span class="mono">j${e.start}${e.end ? '–' + e.end : ''}</span> ${esc(e.label)}${e.start > S.world.t ? ' <span class="pill">à venir</span>' : ''}</li>`).join('');
+  }
+
+  // ----- graphiques (canvas, couleurs issues des tokens) -----
+  function setup(cv) {
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = +cv.getAttribute('height');
+    cv.style.height = h + 'px';
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    return { g, w, h };
+  }
+  function axes(g, w, h, pad, ymin, ymax, fmt, ticks = 4) {
+    g.font = `11px ${css('--f-mono')}`; g.fillStyle = css('--muted'); g.strokeStyle = css('--line'); g.lineWidth = 1;
+    for (let i = 0; i <= ticks; i++) {
+      const v = ymin + (i / ticks) * (ymax - ymin), y = pad.t + (1 - i / ticks) * (h - pad.t - pad.b);
+      g.beginPath(); g.moveTo(pad.l, y + 0.5); g.lineTo(w - pad.r, y + 0.5); g.stroke();
+      g.textAlign = 'right'; g.fillText(fmt(v), pad.l - 6, y + 4);
+    }
+    g.textAlign = 'center';
+    for (let d = 0; d <= HORIZON; d += 60) { const x = pad.l + (d / HORIZON) * (w - pad.l - pad.r); g.fillText(`j${d}`, x, h - 6); }
+  }
+  const X = (pad, w) => (d) => pad.l + (d / HORIZON) * (w - pad.l - pad.r);
+  const Y = (pad, h, a, b) => (v) => pad.t + (1 - (v - a) / (b - a)) * (h - pad.t - pad.b);
+  function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(Math.max(1, v)))); return Math.ceil(v / p) * p; }
+
+  function drawDemand() {
+    const { g, w, h } = setup($('c-demand'));
+    const recs = S.agent.records;
+    const pad = { l: 44, r: 10, t: 12, b: 22 };
+    const ymax = niceMax(Math.max(150, ...recs.map((r) => Math.max(r.sales, r.pred ? Math.exp(r.pred.mu) * 1.3 : 0))) * 1.08);
+
+    const x = X(pad, w), y = Y(pad, h, 0, ymax);
+    axes(g, w, h, pad, 0, ymax, (v) => Math.round(v));
+    // bande de prévision (rognée à la zone du graphique)
+    g.save(); g.beginPath(); g.rect(pad.l, pad.t, w - pad.l - pad.r, h - pad.t - pad.b); g.clip();
+    g.fillStyle = css('--band'); g.beginPath();
+    const pr = recs.filter((r) => r.pred);
+    pr.forEach((r, i) => { const v = Math.exp(r.pred.mu + 1.2816 * r.pred.s); i ? g.lineTo(x(r.t), y(v)) : g.moveTo(x(r.t), y(v)); });
+    [...pr].reverse().forEach((r) => g.lineTo(x(r.t), y(Math.exp(r.pred.mu - 1.2816 * r.pred.s))));
+    g.closePath(); g.fill();
+    g.strokeStyle = css('--model'); g.lineWidth = 1.4; g.beginPath(); pr.forEach((r, i) => (i ? g.lineTo(x(r.t), y(Math.exp(r.pred.mu))) : g.moveTo(x(r.t), y(Math.exp(r.pred.mu))))); g.stroke();
+    g.restore();
+    // vérité
+    if (showTruth) {
+      g.strokeStyle = css('--oracle'); g.setLineDash([4, 4]); g.lineWidth = 1.5;
+      for (const e of S.world.scenario.events) { if (e.type === 'cost') continue; for (const d of [e.start, e.end].filter((v) => v != null)) { g.beginPath(); g.moveTo(x(d), pad.t); g.lineTo(x(d), h - pad.b); g.stroke(); } }
+      g.setLineDash([]);
+    }
+    // croyances
+    g.strokeStyle = css('--accent'); g.fillStyle = css('--accent'); g.lineWidth = 2; g.font = `600 11px ${css('--f-body')}`; g.textAlign = 'left';
+    S.agent.beliefs.forEach((b) => {
+      for (const d of [b.tau, b.end].filter((v) => v != null)) { g.beginPath(); g.moveTo(x(d), pad.t); g.lineTo(x(d), h - pad.b); g.stroke(); }
+      const lab = b.type === 'level' ? `${Math.exp(b.coef) - 1 >= 0 ? '+' : ''}${Math.round((Math.exp(b.coef) - 1) * 100)} %` : b.type === 'elasticity' ? 'élasticité' : 'marketing';
+      g.fillText(lab, Math.min(x(b.tau) + 4, w - 70), pad.t + 10);
+    });
+    // ventes
+    for (const r of recs) {
+      if (r.censored) { g.fillStyle = css('--bad'); g.beginPath(); g.moveTo(x(r.t), y(r.sales) - 4); g.lineTo(x(r.t) - 3, y(r.sales) + 2); g.lineTo(x(r.t) + 3, y(r.sales) + 2); g.closePath(); g.fill(); }
+      else { g.fillStyle = css('--ink'); g.beginPath(); g.arc(x(r.t), y(r.sales), 1.8, 0, 7); g.fill(); }
+    }
+    // aujourd'hui
+    g.strokeStyle = css('--muted'); g.lineWidth = 1; g.beginPath(); g.moveTo(x(S.world.t), pad.t); g.lineTo(x(S.world.t), h - pad.b); g.stroke();
+  }
+  function drawPrice() {
+    const { g, w, h } = setup($('c-price'));
+    const pad = { l: 44, r: 10, t: 10, b: 22 };
+    const x = X(pad, w), y = Y(pad, h, 1, 7);
+    axes(g, w, h, pad, 1, 7, (v) => v.toFixed(0) + ' €', 6);
+    const ym = Y(pad, h, 0, 300);
+    g.fillStyle = css('--soft');
+    const bw = Math.max(1, (w - pad.l - pad.r) / HORIZON);
+    S.log.forEach((o) => { if (o.marketing) g.fillRect(x(o.t), ym(o.marketing), bw, h - pad.b - ym(o.marketing)); });
+    const line = (arr, col, wd) => { g.strokeStyle = col; g.lineWidth = wd; g.beginPath(); arr.forEach((o, i) => (i ? g.lineTo(x(o.t), y(o.price)) : g.moveTo(x(o.t), y(o.price)))); g.stroke(); };
+    line(S.olog, css('--oracle'), 1.4); line(S.log, css('--accent'), 1.6);
+  }
+  function drawProfit() {
+    const { g, w, h } = setup($('c-profit'));
+    const pad = { l: 56, r: 10, t: 10, b: 22 };
+    const all = [...S.cum, ...S.ocum, ...S.hcum];
+    const ymin = Math.min(0, ...all), ymax = niceMax(Math.max(1000, ...all));
+    const x = X(pad, w), y = Y(pad, h, ymin, ymax);
+    axes(g, w, h, pad, ymin, ymax, (v) => `${Math.round(v / 1000)} k€`);
+    const line = (arr, col) => { g.strokeStyle = col; g.lineWidth = 2; g.beginPath(); arr.forEach((v, i) => (i ? g.lineTo(x(i + 1), y(v)) : g.moveTo(x(1), y(v)))); g.stroke(); };
+    line(S.hcum, css('--habit')); line(S.ocum, css('--oracle')); line(S.cum, css('--accent'));
+    if (S.cum.length) { g.fillStyle = css('--accent'); g.beginPath(); g.arc(x(S.cum.length), y(S.cum.at(-1)), 3.5, 0, 7); g.fill(); }
+  }
+  function drawHist(hs) {
+    const cv = $('rv-hist'); const { g, w, h } = setup(cv);
+    const pad = { l: 8, r: 8, t: 6, b: 20 };
+    const mx = Math.max(...hs.counts), n = hs.counts.length, bw = (w - pad.l - pad.r) / n;
+    hs.counts.forEach((c, i) => {
+      const v0 = hs.min + (i / n) * (hs.max - hs.min);
+      g.fillStyle = v0 < 0 ? css('--bad') : css('--model');
+      const bh = (c / mx) * (h - pad.t - pad.b);
+      g.fillRect(pad.l + i * bw + 1, h - pad.b - bh, bw - 2, bh);
+    });
+    g.fillStyle = css('--muted'); g.font = `11px ${css('--f-mono')}`;
+    g.textAlign = 'left'; g.fillText(euro(hs.min), pad.l, h - 5); g.textAlign = 'right'; g.fillText(euro(hs.max), w - pad.r, h - 5);
+    if (hs.min < 0 && hs.max > 0) { const zx = pad.l + ((0 - hs.min) / (hs.max - hs.min)) * (w - pad.l - pad.r); g.textAlign = 'center'; g.fillText('0 €', zx, h - 5); }
+  }
+
+  // ----- câblage -----
+  $('play').onclick = () => setPlaying(!playing);
+  $('step1').onclick = () => { stop(); if (!waiting) startDay(); renderAll(true); };
+  $('step7').onclick = () => { stop(); for (let i = 0; i < 7 && !waiting; i++) if (startDay() !== 'ok') break; renderAll(); };
+  $('reset').onclick = () => { stop(); newYear(Math.max(1, Math.min(9999, +$('seed').value || 1)), 0); };
+  $('rv-approve').onclick = () => decide('approve');
+  $('rv-reject').onclick = () => decide('reject');
+  $('inject-go').onclick = () => inject($('inject').value);
+  $('truth-btn').onclick = () => { showTruth = !showTruth; renderAll(); };
+  const setRev = (v) => { reviewer = v; $('rev-human').setAttribute('aria-pressed', String(v === 'human')); $('rev-sim').setAttribute('aria-pressed', String(v === 'sim')); };
+  $('rev-human').onclick = () => setRev('human');
+  $('rev-sim').onclick = () => { setRev('sim'); if (waiting) { const d = simulatedReviewer(waiting.review); decide(d); } };
+  document.addEventListener('keydown', (e) => { if (!waiting) return; if (e.key === 'Escape') decide('reject'); });
+  const redraw = () => S && (drawDemand(), drawPrice(), drawProfit());
+  window.addEventListener('resize', redraw);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', redraw);
+  new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  buildRing();
+  // État de départ réaliste : 98 jours déjà vécus (relecteur simulé), juste avant l'arrivée du concurrent.
+  newYear(1, 98);
+})();
+
+</script>

@@ -1,0 +1,249 @@
+<title>CORTEX Boulangerie</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout : instrument scientifique en trois colonnes — l'anneau de la boucle (cerveau), les courbes (le monde), le journal (la pensée). */
+:root {
+  --bg: #e9edf1; --panel: #f7f9fb; --ink: #15212c; --muted: #5a6876; --line: #d2d9e0; --soft: #e1e7ec;
+  --accent: #b9640f; --accent-ink: #ffffff; --model: #2c67ad; --oracle: #7656a6; --habit: #8a949e;
+  --good: #23784c; --warn: #9a6a00; --bad: #b8372a; --band: rgba(44, 103, 173, 0.16);
+  --f-display: "Sora", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e141a; --panel: #151d25; --ink: #e4ebf2; --muted: #93a1ae; --line: #25313c; --soft: #1c2630;
+  --accent: #e8984a; --accent-ink: #1a1007; --model: #6fa6e6; --oracle: #ad90d8; --habit: #75808b;
+  --good: #4cc38a; --warn: #e0b04a; --bad: #e86a5c; --band: rgba(111, 166, 230, 0.2); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0e141a; --panel: #151d25; --ink: #e4ebf2; --muted: #93a1ae; --line: #25313c; --soft: #1c2630;
+  --accent: #e8984a; --accent-ink: #1a1007; --model: #6fa6e6; --oracle: #ad90d8; --habit: #75808b;
+  --good: #4cc38a; --warn: #e0b04a; --bad: #e86a5c; --band: rgba(111, 166, 230, 0.2); color-scheme: dark; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 40px; }
+.wrap { max-width: 1480px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+.mono, .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+.brand h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
+.brand h1 span { color: var(--accent); }
+.brand p { margin: 2px 0 0; color: var(--muted); max-width: 70ch; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button, select, input { font: inherit; color: var(--ink); }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 12px; cursor: pointer; font-weight: 500; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--model); outline-offset: 2px; }
+select, input[type="number"] { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 8px; }
+input[type="number"] { width: 5.5em; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--panel); padding: 7px 10px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.ctl-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; max-width: 100%; }
+select { max-width: 100%; min-width: 0; }
+.ctl-group label { color: var(--muted); font-size: 12px; }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; min-width: 0; }
+.kpi .v { font-family: var(--f-mono); font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.kpi .s { color: var(--muted); font-size: 12px; }
+
+.grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 860px) { .grid { grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); } .col-right { grid-column: 1 / -1; } }
+@media (min-width: 1280px) { .grid { grid-template-columns: minmax(300px, 350px) minmax(0, 1fr) minmax(320px, 400px); } .col-right { grid-column: auto; } }
+.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; min-width: 0; }
+.panel h2 { font-size: 15px; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.panel h2 small { font-family: var(--f-mono); font-weight: 400; font-size: 11px; color: var(--muted); }
+
+#ring { width: 100%; max-width: 360px; display: block; margin: 0 auto; }
+#ring text { font-family: var(--f-body); font-size: 10.5px; fill: var(--muted); }
+#ring .n-dot { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; transition: fill .25s, stroke .25s; }
+#ring .n.today .n-dot { fill: var(--soft); stroke: var(--model); }
+#ring .n.active .n-dot { fill: var(--accent); stroke: var(--accent); }
+#ring .n.active text.lbl { fill: var(--ink); font-weight: 600; }
+#ring .edge { stroke: var(--line); stroke-width: 1.4; fill: none; }
+#ring .edge.lit { stroke: var(--model); }
+#ring .center-t { font-family: var(--f-display); font-size: 15px; fill: var(--ink); font-weight: 600; }
+#ring .center-s { font-family: var(--f-mono); font-size: 10px; fill: var(--muted); }
+#ring .cnt { font-family: var(--f-mono); font-size: 9px; fill: var(--muted); }
+.stage-now { min-height: 4.5em; font-size: 13px; border-top: 1px solid var(--line); padding-top: 8px; margin-top: 4px; }
+.stage-now b { font-family: var(--f-display); }
+
+canvas.chart { width: 100%; display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+
+.journal { display: flex; flex-direction: column; gap: 2px; max-height: 560px; overflow-y: auto; padding-right: 4px; }
+.jline { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; padding: 5px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+.jline .st { font-family: var(--f-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding-top: 1px; }
+.jline.hot .st { color: var(--accent); font-weight: 500; }
+.jline.contra .st { color: var(--bad); }
+
+.belief { border-left: 3px solid var(--model); padding: 4px 0 4px 10px; margin-bottom: 8px; font-size: 13px; }
+.belief.prov { border-left-color: var(--warn); }
+.belief.gone { border-left-color: var(--line); color: var(--muted); text-decoration: line-through; }
+.belief .meta { font-family: var(--f-mono); font-size: 11px; color: var(--muted); text-decoration: none; display: block; }
+.pill { display: inline-block; font-family: var(--f-mono); font-size: 10.5px; padding: 1px 7px; border-radius: 99px; border: 1px solid currentColor; margin-left: 4px; }
+.pill.warn { color: var(--warn); } .pill.good { color: var(--good); } .pill.bad { color: var(--bad); }
+.empty { color: var(--muted); font-size: 13px; }
+.hbar { display: grid; grid-template-columns: minmax(0, 1fr) 46px; gap: 8px; align-items: center; font-size: 12px; margin: 3px 0; }
+.hbar .track { height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; margin-top: 3px; }
+.hbar .fill { height: 100%; background: var(--model); }
+ul.plain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+ul.plain li { padding-left: 12px; position: relative; }
+ul.plain li::before { content: ""; position: absolute; left: 0; top: 0.6em; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.truth { font-size: 12.5px; }
+.truth li::before { background: var(--oracle); }
+
+/* revue humaine */
+.overlay { position: fixed; inset: 0; background: rgba(8, 12, 16, 0.55); display: flex; align-items: center; justify-content: center; z-index: 20;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.modal { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; max-width: 640px; width: 100%; max-height: 100%; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.modal h3 { font-size: 18px; }
+.cmp { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.cmp > div { border: 1px solid var(--line); border-radius: var(--r); padding: 10px; }
+.cmp .lab { font-family: var(--f-mono); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.cmp table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.cmp td { padding: 2px 0; } .cmp td:last-child { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.reasons { margin: 0; padding-left: 18px; font-size: 13px; }
+.modal .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.note { font-size: 12px; color: var(--muted); }
+footer.how { font-size: 13px; color: var(--muted); max-width: 90ch; }
+footer.how b { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { #ring .n-dot { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="eyebrow">Boucle cognitive autonome · moteur bayésien exact · aucun LLM à l'exécution</div>
+      <h1>CORTEX <span>Boulangerie</span></h1>
+      <p>Un agent dirige une boulangerie dont les règles cachées changent. Il observe, confronte les faits à sa théorie, formule des hypothèses, simule avant d'agir et vous demande votre avis quand le risque est élevé.</p>
+    </div>
+    <div class="controls">
+      <button class="btn primary" id="play" type="button">▶ Lancer</button>
+      <button class="btn" id="step1" type="button">+1 jour</button>
+      <button class="btn" id="step7" type="button">+1 semaine</button>
+      <div class="ctl-group"><label for="speed">Vitesse</label>
+        <select id="speed"><option value="slow">Pas à pas commenté</option><option value="normal" selected>Normale</option><option value="fast">Rapide</option></select></div>
+      <div class="ctl-group"><label for="seed">Monde n°</label><input id="seed" type="number" min="1" max="9999" value="1"><button class="btn" id="reset" type="button">Nouvelle année</button></div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="ctl-group"><span class="eyebrow">Revue humaine</span>
+      <div class="seg" role="group" aria-label="Qui valide les décisions risquées">
+        <button type="button" id="rev-human" aria-pressed="true">Vous</button>
+        <button type="button" id="rev-sim" aria-pressed="false">Relecteur simulé</button>
+      </div></div>
+    <div class="ctl-group"><label for="inject">Provoquer un événement</label>
+      <select id="inject">
+        <option value="rival">Un 2ᵉ concurrent (−30 % de clients)</option>
+        <option value="viral">Passage à la télé (+60 %, 3 semaines)</option>
+        <option value="elas">Crise du pouvoir d'achat (clients plus sensibles au prix)</option>
+        <option value="cost">Hausse du beurre (coût +40 %)</option>
+      </select><button class="btn" id="inject-go" type="button">Déclencher</button></div>
+    <div class="ctl-group"><button class="btn" id="truth-btn" type="button" aria-pressed="false">Révéler la vérité cachée</button></div>
+  </div>
+
+  <section class="kpis" aria-label="Indicateurs">
+    <div class="kpi"><div class="eyebrow">Jour</div><div class="v" id="k-day">0</div><div class="s" id="k-dow">sur 365</div></div>
+    <div class="kpi"><div class="eyebrow">Profit cumulé CORTEX</div><div class="v" id="k-profit">0 €</div><div class="s" id="k-pct">—</div></div>
+    <div class="kpi"><div class="eyebrow">Oracle (vérité connue)</div><div class="v" id="k-ref">0 €</div><div class="s" id="k-ref-s">habitude : 0 €</div></div>
+    <div class="kpi"><div class="eyebrow">Croyances admises</div><div class="v" id="k-bel">0</div><div class="s" id="k-bel-s">ruptures structurelles</div></div>
+    <div class="kpi"><div class="eyebrow">Revues humaines</div><div class="v" id="k-rev">0</div><div class="s" id="k-rev-s">validées / refusées</div></div>
+    <div class="kpi"><div class="eyebrow">Calibration (IC80)</div><div class="v" id="k-cal">—</div><div class="s" id="k-cal-s">couverture 28 jours</div></div>
+  </section>
+
+  <div class="grid">
+    <div class="col">
+      <section class="panel">
+        <h2>La boucle <small id="ring-sub">jour 0</small></h2>
+        <svg id="ring" viewBox="-44 0 428 340" role="img" aria-label="Étapes de la boucle cognitive"></svg>
+        <div class="stage-now" id="stage-now" aria-live="polite"></div>
+      </section>
+      <section class="panel">
+        <h2>Croyances sur le monde <small>admises par facteur de Bayes</small></h2>
+        <div id="beliefs"></div>
+      </section>
+      <section class="panel">
+        <h2>Dernières hypothèses testées <small id="hyp-sub"></small></h2>
+        <div id="hyps"></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel">
+        <h2>Clients : prévision et réalité <small>bande = intervalle à 80 % du modèle</small></h2>
+        <canvas class="chart" id="c-demand" height="260"></canvas>
+        <div class="legend"><span><i style="background:var(--ink)"></i>ventes</span><span><i style="background:var(--bad)"></i>rupture (demande ≥ stock)</span><span><i style="background:var(--model)"></i>prévision</span><span><i style="background:var(--accent)"></i>rupture crue par l'agent</span><span id="lg-truth" hidden><i style="background:var(--oracle)"></i>événement réel caché</span></div>
+      </section>
+      <section class="panel">
+        <h2>Prix et marketing <small>CORTEX contre l'oracle</small></h2>
+        <canvas class="chart" id="c-price" height="170"></canvas>
+        <div class="legend"><span><i style="background:var(--accent)"></i>prix CORTEX</span><span><i style="background:var(--oracle)"></i>prix optimal (oracle)</span><span><i style="background:var(--soft);height:8px"></i>marketing CORTEX (€/j)</span></div>
+      </section>
+      <section class="panel">
+        <h2>Profit cumulé <small>trois politiques, mêmes jours, mêmes clients</small></h2>
+        <canvas class="chart" id="c-profit" height="190"></canvas>
+        <div class="legend"><span><i style="background:var(--oracle)"></i>oracle (connaît la vérité)</span><span><i style="background:var(--accent)"></i>CORTEX</span><span><i style="background:var(--habit)"></i>habitude (prix fixe 4 €)</span></div>
+      </section>
+    </div>
+
+    <div class="col col-right">
+      <section class="panel">
+        <h2>Journal de pensée <small id="j-sub"></small></h2>
+        <div class="journal" id="journal"></div>
+      </section>
+      <section class="panel">
+        <h2>Apprentissage <small>compétences · règles · rêves</small></h2>
+        <div class="eyebrow">Compétence</div><div id="skills" class="note" style="margin:4px 0 10px"></div>
+        <div class="eyebrow">Règles apprises de vos décisions</div><ul class="plain" id="rules" style="margin:6px 0 10px"></ul>
+        <div class="eyebrow">Dernier rêve (auto-audit hebdomadaire)</div><ul class="plain" id="dream" style="margin-top:6px"></ul>
+      </section>
+      <section class="panel" id="truth-panel" hidden>
+        <h2>Vérité cachée <small>invisible pour l'agent</small></h2>
+        <ul class="plain truth" id="truth"></ul>
+      </section>
+    </div>
+  </div>
+
+  <footer class="how">
+    <b>Comment vérifier.</b> L'agent ne voit que le jour, le coût unitaire, ses propres décisions et ses ventes. Quand le stock est épuisé, il ne voit pas la demande réelle. Les ruptures structurelles sont cachées. Révélez-les pour comparer avec ce que l'agent a déduit seul, ou provoquez-en une et regardez combien de jours il lui faut pour la détecter et l'expliquer. Le code source, les tests et le banc d'essai sur 20 mondes figurent dans le dépôt.
+  </footer>
+</div>
+
+<div class="overlay" id="review" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rv-title">
+    <div class="eyebrow" id="rv-eyebrow">Revue humaine · jour 0</div>
+    <h3 id="rv-title">L'agent Risque demande votre validation</h3>
+    <ul class="reasons" id="rv-reasons"></ul>
+    <div class="cmp">
+      <div><div class="lab">Proposition du CEO</div><table id="rv-prop"></table></div>
+      <div><div class="lab">Plan de repli (statu quo)</div><table id="rv-fall"></table></div>
+    </div>
+    <div><div class="lab eyebrow">Profit simulé de la proposition (240 mondes possibles)</div><canvas class="chart" id="rv-hist" height="110"></canvas></div>
+    <p class="note" id="rv-voi"></p>
+    <div class="actions">
+      <button class="btn" id="rv-reject" type="button">Refuser (plan de repli)</button>
+      <button class="btn primary" id="rv-approve" type="button">Approuver</button>
+    </div>
+    <p class="note">Vos décisions comptent : un refus devient une règle que l'agent respectera, et quatre semaines sans refus l'assouplissent.</p>
+  </div>
+</div>
+
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+/*__APP__*/
+</script>
