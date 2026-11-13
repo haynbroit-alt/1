@@ -50,7 +50,7 @@ for (const p of agents) {
   L.push(`| ${LABELS[p]} | ${fams.map((f) => { const x = ev.filter((e) => e.fam === f); return x.length ? `${x.filter((e) => e.understood).length}/${x.length}` : '—'; }).join(' | ')} | **${(100 * ev.filter((e) => e.understood).length / ev.length).toFixed(0)} %** | ${d.length ? d[Math.floor(d.length / 2)] + ' j' : '—'} | ${mean(S.map((s) => s.falses)).toFixed(2)} |`);
 }
 L.push(`\n## Différences appariées (IC95)\n\n| Comparaison | Profit (€/an) | Gagne | Erreur du modèle | Compréhension (pts) |\n|---|---:|---:|---:|---:|`);
-const MAIN = by.v4 ? 'v4' : 'v3';
+const MAIN = by.v5 ? 'v5' : by.v4 ? 'v4' : 'v3';
 for (const ref of agents.filter((p) => p !== MAIN)) {
   const k = ks(MAIN).filter((k) => by[ref][k]); if (!k.length) continue;
   const u = (p, kk) => { const s = score(by[p][kk]).ev; return s.length ? s.filter((e) => e.understood).length / s.length : null; };

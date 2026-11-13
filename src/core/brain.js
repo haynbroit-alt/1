@@ -72,9 +72,17 @@ export function createBrain(body, opts = {}) {
   const isActive = (l, v) => v !== l.values[0];
   const freshState = () => ({ ema: Object.fromEntries(decLevers.map((l) => [l.key, { 0.7: l.init, 0.9: l.init }])), since: Object.fromEntries(discLevers.map((l) => [l.key, 0])), lag: {}, inv: {} });
   // valeurs des variables construites pour une action donnée, à partir de l'état de la veille
+  // (performance) la partie qui ne dépend que de l'état de la veille est calculée une fois par état
+  const stCache = new WeakMap();
+  const stateOnly = (st) => {
+    let c = stCache.get(st);
+    if (!c) { c = {}; for (const d of latentDefs) if (d.latentKind === 'inv') c[d.key] = st.inv?.[d.key] ?? 0; else if (d.latentKind === 'lag') c[d.key] = st.lag[d.outcome] ?? null; stCache.set(st, c); }
+    return c;
+  };
   const derived = (st, a) => {
-    const x = {};
+    const x = { ...stateOnly(st) };
     for (const d of latentDefs) {
+      if (d.latentKind === 'inv' || d.latentKind === 'lag') continue;
       if (d.latentKind === 'ema') x[d.key] = (1 - d.lambda) * a[d.lever] + d.lambda * st.ema[d.lever][d.lambda];
       else if (d.latentKind === 'since') { const l = discLevers.find((y) => y.key === d.lever); x[d.key] = isActive(l, a[d.lever]) ? 0 : st.since[d.lever] + 1; }
       else if (d.latentKind === 'inv') x[d.key] = st.inv?.[d.key] ?? 0;
@@ -107,8 +115,10 @@ export function createBrain(body, opts = {}) {
   const adFor = (a) => Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: 0.5 * a[l.key] + 0.5 * A.ad[l.key][0.5], 0.8: 0.2 * a[l.key] + 0.8 * A.ad[l.key][0.8] }]));
   A.dstate = freshState();
   const rec = (t, a, ctx, st = A.dstate) => ({ t, dow: t % 7, x: { ...a, ...ctx, ...derived(st, a) }, ad: adFor(a) });
-  const preds = (t, ctx, st = A.dstate) => Object.fromEntries(Object.values(M).map((m) => [m.out.key, (a) => { const p = m.model.predict(rec(t, a, ctx, st)); return { mu: p.mu, s: p.scale * m.kappa }; }]));
-  const samplePreds = (t, ctx, st = A.dstate) => Object.fromEntries(Object.values(M).map((m) => { const s = m.model.sample(rng); return [m.out.key, (a) => { const r = rec(t, a, ctx, st); return { mu: m.model.muWith(s.theta, r), s: s.sigma * Math.sqrt(varianceWeight(t, m.beliefs)) }; }]; }));
+  // (performance) un même enregistrement est partagé entre les mesures pour une action donnée
+  const recCache = (t, ctx, st) => { const c = new Map(); return (a) => { const k = decLevers.map((l) => a[l.key]).join('|'); let r = c.get(k); if (!r) { r = rec(t, a, ctx, st); c.set(k, r); } return r; }; };
+  const preds = (t, ctx, st = A.dstate) => { const R = recCache(t, ctx, st); return Object.fromEntries(Object.values(M).map((m) => [m.out.key, (a) => { const p = m.model.predict(R(a)); return { mu: p.mu, s: p.scale * m.kappa }; }])); };
+  const samplePreds = (t, ctx, st = A.dstate) => { const R = recCache(t, ctx, st); return Object.fromEntries(Object.values(M).map((m) => { const s = m.model.sample(rng); return [m.out.key, (a) => { const r = R(a); return { mu: m.model.muWith(s.theta, r), s: s.sigma * Math.sqrt(varianceWeight(t, m.beliefs)) }; }]; })); };
 
   // ---------- PLANIFICATION : découvrir des stratégies dans son propre modèle ----------
   // Familles de plans : statu quo optimisé, et pour chaque levier discret, chaque valeur, chaque période

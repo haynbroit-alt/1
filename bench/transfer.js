@@ -49,7 +49,7 @@ async function runJob({ body: name, seed, policy }) {
   const disc = body.levers.filter((l) => l.kind === 'discrete');
   const r = runYear(runBody, runPol, { seed, brainOpts, onDay: (t, a) => { for (const l of disc) if (a[l.key] !== l.values[0]) (actDays[l.key] ??= []).push(t); } });
   const beliefs = r.brain ? [...r.brain.beliefs(), ...r.brain.retracted()].map((b) => ({ outcome: b.outcome, key: b.key ?? b.family, tau: b.gate.kind === 'all' ? null : b.gate.tau, acceptedAt: b.acceptedAt, retractedAt: b.retractedAt ?? null })) : [];
-  return { body: name, seed, policy, reward: r.reward, rmse: r.rmse, beliefs, events, actDays, secs: (Date.now() - t0) / 1000 };
+  return { body: name, seed, policy, reward: r.reward, rmse: r.rmse, beliefs, events, actDays, perplexity: r.brain?.perplexity?.() ?? null, secs: (Date.now() - t0) / 1000 };
 }
 
 if (!isMainThread) parentPort.on('message', async (job) => { try { parentPort.postMessage({ ok: true, res: await runJob(job) }); } catch (e) { parentPort.postMessage({ ok: false, err: `${JSON.stringify(job)} ${e.stack}` }); } });
