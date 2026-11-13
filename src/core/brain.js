@@ -23,7 +23,8 @@ export function createBrain(body, opts = {}) {
   // curiosity : testée en développement (v4-dev1) puis désactivée — aucun gain de profit, compréhension −9 ± 7 pts
   const o = { seed: 1, discovery: true, background: true, omnibus: true, vigilance: true, window: null, memory: true, planning: true, curiosity: false, horizon: 21,
     // v5 : C1 exploration par la valeur de l'information · C2 variables latentes inventées · C3 remise en cause · C4 incompréhension
-    explore: true, invent: true, challenge: true, perplexity: true, ...opts };
+    // C3 (challenge) : désactivée après développement (v5-dev2 : −30,6 ± 28,6 k€/an, fausses alertes de dérive) — évaluée en variante
+    explore: true, invent: true, challenge: false, perplexity: true, ...opts };
   o.families ??= FAMILIES;
   const rng = makeRng(o.seed * 7919 + 3);
   const levers = body.levers, ctxDefs = body.context ?? [];
