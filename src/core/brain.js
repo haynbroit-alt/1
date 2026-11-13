@@ -67,7 +67,7 @@ export function createBrain(body, opts = {}) {
   }
   const A = {
     body, opts: o, M, stageCount: Object.fromEntries(STAGES.map(([k]) => [k, 0])), today: null, history: [], insights: [],
-    ad: Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: l.init, 0.8: l.init }])), dstate: null, tried: {}, lastCurious: -99, cum: 0, experimentUntil: -1, maxStep: 0.15, expLever: null, expCooldown: {},
+    ad: Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: l.init, 0.8: l.init }])), dstate: null, tried: {}, lastCurious: -99, curiositySpent: 0, cum: 0, experimentUntil: -1, maxStep: 0.15, expLever: null, expCooldown: {},
   };
   const trace = [];
   const emit = (stage, text, data = {}) => { A.stageCount[stage]++; trace.push({ t: A.today?.t ?? null, stage, text, data }); };
@@ -254,13 +254,16 @@ export function createBrain(body, opts = {}) {
     }
     // curiosité : une option jamais (ou presque jamais) essayée ne peut pas être apprise
     let curious = false;
+    // budget d'exploration : au plus 2 % de ce que l'activité a rapporté jusqu'ici
     if (o.curiosity && t >= 7 && t < 200 && t - A.lastCurious >= 5) {
+      const budget = 0.02 * Math.max(0, A.cum) - A.curiositySpent;
       for (const l of discLevers) for (const val of l.values) {
         if ((A.tried[`${l.key}=${val}`] ?? 0) >= 2 || val === proposal.action[l.key] || curious) continue;
         const cand = withCapacity(body, { ...proposal.action, [l.key]: val }, P, ctx);
-        if (proposal.value - cand.value < 0.15 * Math.abs(proposal.value) + 5) {
-          proposal = cand; curious = true; A.lastCurious = t;
-          note += ` CURIOSITÉ : j'essaie « ${l.label} » = ${val} (jamais ou peu essayé ; coût espéré ${num(Math.max(0, proposal.value - cand.value))} €).`;
+        const cost = Math.max(0, proposal.value - cand.value);
+        if (cost <= budget) {
+          note += ` CURIOSITÉ : j'essaie « ${l.label} » = ${val} (peu essayé ; coût espéré ${num(cost)} €, budget d'exploration restant ${num(budget - cost)} €).`;
+          proposal = cand; curious = true; A.lastCurious = t; A.curiositySpent += cost;
         }
       }
     }
