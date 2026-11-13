@@ -1,0 +1,36 @@
+# Transfert — 140 épisodes, graines 1–4
+
+## Profit (% de l'oracle)
+
+| Politique | usine | restaurant | abonnement | boulangerie | marche | fleuriste | glacier | **Tous** |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Oracle (connaît la vérité) | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 | **100.0** |
+| Habitude (règle fixe) | 27.2 | 57.1 | 35.6 | 47.5 | 57.4 | 46.0 | 62.4 | **47.6** |
+| CORTEX v3 gelé (src_v3) | 24.3 | 87.3 | 95.2 | 78.0 | 84.2 | 87.4 | 84.1 | **77.2** |
+| v4 sans curiosité | 73.6 | 85.8 | 95.0 | 78.6 | 85.7 | 91.8 | 85.2 | **85.1** |
+| CORTEX v4 : modèles construits + stratégies | 72.0 | 85.8 | 94.6 | 79.9 | 85.6 | 88.9 | 81.1 | **84.0** |
+
+## Erreur du modèle du monde (RMS du log, 7 j à l'avance ; plus bas = mieux)
+
+| Politique | usine | restaurant | abonnement | boulangerie | marche | fleuriste | glacier | **Tous** |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| CORTEX v3 gelé (src_v3) | 0.278 | 0.179 | 0.326 | 0.194 | 0.149 | 0.212 | 0.208 | **0.221** |
+| v4 sans curiosité | 0.253 | 0.169 | 0.343 | 0.196 | 0.133 | 0.183 | 0.190 | **0.210** |
+| CORTEX v4 : modèles construits + stratégies | 0.305 | 0.152 | 0.324 | 0.189 | 0.140 | 0.207 | 0.200 | **0.217** |
+
+## Compréhension (bonne famille, bonne variable, bonne date ±14 j) et fausses découvertes
+
+| Politique | level | slope:cadence | dow | adstock | slope:meteo | slope:prix | slope:pub | slope:price | trend | variance | pulse | season | threshold | **Compris** | Délai médian | Fausses / an |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| CORTEX v3 gelé (src_v3) | 23/44 | 2/4 | 10/12 | 3/8 | 0/4 | 3/4 | 0/4 | 4/8 | 1/4 | 1/4 | 1/4 | 1/4 | 1/4 | **46 %** | 13 j | 2.36 |
+| v4 sans curiosité | 21/44 | 1/4 | 11/12 | 1/8 | 0/4 | 4/4 | 0/4 | 4/8 | 3/4 | 3/4 | 2/4 | 2/4 | 2/4 | **50 %** | 14 j | 1.82 |
+| CORTEX v4 : modèles construits + stratégies | 19/44 | 0/4 | 10/12 | 1/8 | 1/4 | 3/4 | 0/4 | 4/8 | 2/4 | 2/4 | 1/4 | 2/4 | 1/4 | **43 %** | 14 j | 1.79 |
+
+## Différences appariées (IC95)
+
+| Comparaison | Profit (€/an) | Gagne | Erreur du modèle | Compréhension (pts) |
+|---|---:|---:|---:|---:|
+| v4 − CORTEX v3 gelé (src_v3) | +193956 ± 194608 | 15/28 | -0.004 ± 0.020 | -3.8 ± 10.6 |
+| v4 − v4 sans curiosité | -10037 ± 64328 | 9/28 | +0.007 ± 0.016 | -9.1 ± 7.2 |
+
+Temps moyen par année (v4) : 22.3 s.

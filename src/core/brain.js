@@ -20,7 +20,8 @@ const num = (x) => (Math.abs(x) >= 100 ? Math.round(x).toString() : x.toFixed(2)
 const truncMean = (a) => Math.exp(-0.5 * a * a) / Math.sqrt(2 * Math.PI) / Math.max(1e-9, 1 - normCdf(a));
 
 export function createBrain(body, opts = {}) {
-  const o = { seed: 1, discovery: true, background: true, omnibus: true, vigilance: true, window: null, memory: true, planning: true, curiosity: true, horizon: 21, ...opts };
+  // curiosity : testée en développement (v4-dev1) puis désactivée — aucun gain de profit, compréhension −9 ± 7 pts
+  const o = { seed: 1, discovery: true, background: true, omnibus: true, vigilance: true, window: null, memory: true, planning: true, curiosity: false, horizon: 21, ...opts };
   o.families ??= FAMILIES;
   const rng = makeRng(o.seed * 7919 + 3);
   const levers = body.levers, ctxDefs = body.context ?? [];
