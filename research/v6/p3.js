@@ -22,26 +22,48 @@ function residualSS(pts) {
   const beta = M.map((r, i) => r[3] / r[i]);
   return X.reduce((s, r) => s + (r[3] - beta[0] - beta[1] * r[1] - beta[2] * r[2]) ** 2, 0);
 }
-// plan D-optimal glouton sous budget ; ne dépend que de la formule (figée avant C)
+// plan D-optimal sous budget, optimisé sur le plan ENTIER par échanges (type Fedorov) ; ne dépend que de la formule
+// (figée avant C). Un glouton bloc par bloc dépensait tout le budget de u1 avant de voir les colinéarités.
 export function activePlan(g) {
   if (!g) return null;
   const z = (u) => { const v = g.f(u); return Number.isFinite(v) ? v : null; };
   const cands = CANDS.filter((u) => z(u) != null);
   if (cands.length < 3) return null;
-  const plan = []; let s0 = 0, s1 = 0;
-  for (let b = 0; b < NB; b++) {
-    let best = null;
-    for (const u of cands) {
-      if (s0 + Math.abs(u[0]) > BUDGET.u0 + 1e-9 || s1 + u[1] > BUDGET.u1) continue;
-      const pts = [...plan, u].map((x) => [x, z(x)]);
-      const zs = cands.map(z), med = [...zs].sort((p, q) => p - q)[Math.floor(zs.length / 2)];
-      const score = residualSS(pts) + 1e-6 * Math.abs(z(u) - med); // départage des premiers blocs
-      if (!best || score > best.score) best = { u, score };
+  const crit = (plan) => residualSS(plan.map((x) => [x, z(x)]));
+  const ok = (plan) => plan.reduce((s, u) => s + Math.abs(u[0]), 0) <= BUDGET.u0 + 1e-9 && plan.reduce((s, u) => s + u[1], 0) <= BUDGET.u1;
+  // plusieurs départs faisables et variés ; chacun est amélioré par échanges, le meilleur plan final l'emporte
+  const pad = (head) => [...head, ...Array.from({ length: NB - head.length }, () => [0, 0])].map((u) => (cands.some((c) => c[0] === u[0] && c[1] === u[1]) ? u : [0, 0]));
+  const starts = [
+    pad([[-1, 0], [0, 0], [1, 0], [0, 0], [-1, 0], [0, 0], [1, 0], [0, 0], [-0.5, 0], [0.5, 0]]),
+    pad([[-1, 1], [1, 1], [0, 1], [-1, 0], [1, 0], [-0.5, 0], [0.5, 0]]),
+    pad([[-1, 1], [1, 1], [-1, 0], [1, 0], [-0.5, 0], [0.5, 0], [-0.5, 1]]),
+  ].filter(ok);
+  let bestPlan = null, bestCrit = -1;
+  for (const start of starts) {
+  let plan = start;
+  let best = crit(plan);
+  for (let iter = 0; iter < 50; iter++) {
+    let improved = false;
+    for (let b = 0; b < NB; b++) for (const u of cands) {
+      const trial = plan.map((x, i) => (i === b ? u : x));
+      if (!ok(trial)) continue;
+      const c = crit(trial);
+      if (c > best + 1e-12) { plan = trial; best = c; improved = true; }
     }
-    const u = best ? best.u : [0, 0];
-    plan.push(u); s0 += Math.abs(u[0]); s1 += u[1];
+    if (!improved) {
+      // échanges par paires : certaines formes (u0·u1) ne gagnent qu'avec deux blocs changés ensemble
+      for (let b1 = 0; b1 < NB && !improved; b1++) for (let b2 = b1 + 1; b2 < NB && !improved; b2++) for (const u of cands) for (const v of cands) {
+        const trial = plan.map((x, i) => (i === b1 ? u : i === b2 ? v : x));
+        if (!ok(trial)) continue;
+        const c = crit(trial);
+        if (c > best + 1e-12) { plan = trial; best = c; improved = true; break; }
+      }
+    }
+    if (!improved) break;
   }
-  return plan;
+  if (best > bestCrit) { bestCrit = best; bestPlan = plan; }
+  }
+  return bestPlan;
 }
 const toOverride = (plan) => (t) => (t >= C0 ? plan[Math.min(NB - 1, Math.floor((t - C0) / BLOCK))] : null);
 const HABIT = () => (t) => (t >= C0 ? [0, 0] : null);
