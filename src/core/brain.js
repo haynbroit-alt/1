@@ -20,7 +20,7 @@ const num = (x) => (Math.abs(x) >= 100 ? Math.round(x).toString() : x.toFixed(2)
 const truncMean = (a) => Math.exp(-0.5 * a * a) / Math.sqrt(2 * Math.PI) / Math.max(1e-9, 1 - normCdf(a));
 
 export function createBrain(body, opts = {}) {
-  const o = { seed: 1, discovery: true, background: true, omnibus: true, vigilance: true, window: null, ...opts };
+  const o = { seed: 1, discovery: true, background: true, omnibus: true, vigilance: true, window: null, memory: true, planning: true, curiosity: true, horizon: 21, ...opts };
   o.families ??= FAMILIES;
   const rng = makeRng(o.seed * 7919 + 3);
   const levers = body.levers, ctxDefs = body.context ?? [];
@@ -33,14 +33,41 @@ export function createBrain(body, opts = {}) {
     const thetas = d.thetas ?? (lv && lv.kind !== 'capacity' ? (() => { const g = leverGrid(lv); return [0.2, 0.35, 0.5, 0.65, 0.8].map((q) => g[Math.floor(q * (g.length - 1))]).filter((v, i, a) => a.indexOf(v) === i); })() : []);
     return { key, label: d.label, unit: d.unit, transform: d.transform ?? 'lin', ref: d.ref, scale: d.scale, prior: outcome.priors?.[key], continuous: !lv || lv.kind === 'continuous', carry: !!lv, thetas, sign: d.sign };
   };
+  // ---- variables CONSTRUITES par l'agent (aucune n'est déclarée par le corps) ----
+  // mémoire exponentielle de chaque levier · jours depuis la dernière activation d'un levier discret
+  // · valeur de la veille de chaque mesure. La découverte décidera seule lesquelles comptent.
+  const discLevers = decLevers.filter((l) => l.kind === 'discrete');
+  const latentDefs = [];
+  if (o.memory) {
+    for (const l of decLevers) for (const lam of [0.7, 0.9]) latentDefs.push({ key: `ema${lam * 10}:${l.key}`, label: `mémoire de « ${l.label} » (λ=${lam})`, of: l.label, latent: true, latentKind: 'ema', lambda: lam, lever: l.key, transform: l.transform ?? 'lin', ref: l.ref, scale: l.scale, continuous: true });
+    for (const l of discLevers) latentDefs.push({ key: `since:${l.key}`, label: `jours depuis « ${l.label} »`, of: l.label, latent: true, latentKind: 'since', lever: l.key, transform: 'lin', ref: 0, scale: 10, continuous: true });
+    for (const ox of body.outcomes) latentDefs.push({ key: `lag:${ox.key}`, label: `${ox.label} de la veille`, of: ox.label, latent: true, latentKind: 'lag', outcome: ox.key, transform: 'lin', ref: 0, scale: 1, continuous: true });
+  }
+  const isActive = (l, v) => v !== l.values[0];
+  const freshState = () => ({ ema: Object.fromEntries(decLevers.map((l) => [l.key, { 0.7: l.init, 0.9: l.init }])), since: Object.fromEntries(discLevers.map((l) => [l.key, 0])), lag: {} });
+  // valeurs des variables construites pour une action donnée, à partir de l'état de la veille
+  const derived = (st, a) => {
+    const x = {};
+    for (const d of latentDefs) {
+      if (d.latentKind === 'ema') x[d.key] = (1 - d.lambda) * a[d.lever] + d.lambda * st.ema[d.lever][d.lambda];
+      else if (d.latentKind === 'since') { const l = discLevers.find((y) => y.key === d.lever); x[d.key] = isActive(l, a[d.lever]) ? 0 : st.since[d.lever] + 1; }
+      else x[d.key] = st.lag[d.outcome] ?? null;
+    }
+    return x;
+  };
+  const nextState = (st, a, logOut) => ({
+    ema: Object.fromEntries(decLevers.map((l) => [l.key, { 0.7: 0.3 * a[l.key] + 0.7 * st.ema[l.key][0.7], 0.9: 0.1 * a[l.key] + 0.9 * st.ema[l.key][0.9] }])),
+    since: Object.fromEntries(discLevers.map((l) => [l.key, isActive(l, a[l.key]) ? 0 : st.since[l.key] + 1])),
+    lag: { ...st.lag, ...logOut },
+  });
   const M = {};
   for (const out of body.outcomes) {
-    const space = makeSpace(out, out.inputs.map((k) => describe(k, out)));
+    const space = makeSpace(out, [...out.inputs.map((k) => describe(k, out)), ...latentDefs.map((d) => ({ ...d }))]);
     M[out.key] = { out, space, records: [], beliefs: [], retracted: [], hypLog: [], model: null, kappa: 1, cusum: { pos: 0, neg: 0 }, ec: {}, vc: 0, lastZ: null, probe: null, nextId: 1 };
   }
   const A = {
     body, opts: o, M, stageCount: Object.fromEntries(STAGES.map(([k]) => [k, 0])), today: null, history: [], insights: [],
-    ad: Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: l.init, 0.8: l.init }])), cum: 0, experimentUntil: -1, maxStep: 0.15, expLever: null, expCooldown: {},
+    ad: Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: l.init, 0.8: l.init }])), dstate: null, tried: {}, lastCurious: -99, cum: 0, experimentUntil: -1, maxStep: 0.15, expLever: null, expCooldown: {},
   };
   const trace = [];
   const emit = (stage, text, data = {}) => { A.stageCount[stage]++; trace.push({ t: A.today?.t ?? null, stage, text, data }); };
@@ -50,9 +77,44 @@ export function createBrain(body, opts = {}) {
   const refit = (m) => { if (m.model) for (const r of data(m)) if (r.censored) impute(m, r); m.model = fit(m.space, data(m), m.beliefs); };
   Object.values(M).forEach(refit);
   const adFor = (a) => Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: 0.5 * a[l.key] + 0.5 * A.ad[l.key][0.5], 0.8: 0.2 * a[l.key] + 0.8 * A.ad[l.key][0.8] }]));
-  const rec = (t, a, ctx) => ({ t, dow: t % 7, x: { ...a, ...ctx }, ad: adFor(a) });
-  const preds = (t, ctx) => Object.fromEntries(Object.values(M).map((m) => [m.out.key, (a) => { const p = m.model.predict(rec(t, a, ctx)); return { mu: p.mu, s: p.scale * m.kappa }; }]));
-  const samplePreds = (t, ctx) => Object.fromEntries(Object.values(M).map((m) => { const s = m.model.sample(rng); return [m.out.key, (a) => { const r = rec(t, a, ctx); return { mu: m.model.muWith(s.theta, r), s: s.sigma * Math.sqrt(varianceWeight(t, m.beliefs)) }; }]; }));
+  A.dstate = freshState();
+  const rec = (t, a, ctx, st = A.dstate) => ({ t, dow: t % 7, x: { ...a, ...ctx, ...derived(st, a) }, ad: adFor(a) });
+  const preds = (t, ctx, st = A.dstate) => Object.fromEntries(Object.values(M).map((m) => [m.out.key, (a) => { const p = m.model.predict(rec(t, a, ctx, st)); return { mu: p.mu, s: p.scale * m.kappa }; }]));
+  const samplePreds = (t, ctx, st = A.dstate) => Object.fromEntries(Object.values(M).map((m) => { const s = m.model.sample(rng); return [m.out.key, (a) => { const r = rec(t, a, ctx, st); return { mu: m.model.muWith(s.theta, r), s: s.sigma * Math.sqrt(varianceWeight(t, m.beliefs)) }; }]; }));
+
+  // ---------- PLANIFICATION : découvrir des stratégies dans son propre modèle ----------
+  // Familles de plans : statu quo optimisé, et pour chaque levier discret, chaque valeur, chaque période
+  // et chaque phase, un calendrier périodique. Chaque plan est simulé sur l'horizon dans le modèle appris
+  // (état dérivé propagé jour après jour). Rien n'est spécifique à un métier.
+  function simulatePlan(t, ctx, planFn, H) {
+    let st = A.dstate, total = 0;
+    for (let d = 0; d < H; d++) {
+      const tt = t + d, P = preds(tt, ctx, st);
+      const r = withCapacity(body, planFn(d), P, ctx);
+      total += Math.pow(0.995, d) * r.value;
+      const logOut = Object.fromEntries(body.outcomes.map((x) => [x.key, P[x.key](r.action).mu]));
+      st = nextState(st, r.action, logOut);
+    }
+    return total;
+  }
+  function plan(t, ctx, base) {
+    const H = o.horizon;
+    const baseFn = () => base;
+    const v0 = simulatePlan(t, ctx, baseFn, H);
+    let best = { v: v0, desc: null, fn: baseFn };
+    for (const l of discLevers) for (const val of l.values) {
+      if (val === base[l.key]) continue;
+      const constFn = () => ({ ...base, [l.key]: val });
+      const vc = simulatePlan(t, ctx, constFn, H);
+      if (vc > best.v) best = { v: vc, desc: `« ${l.label} » = ${val} en permanence`, fn: constFn };
+      for (const k of [2, 3, 4, 5, 7, 10, 14, 21]) for (let ph = 0; ph < Math.min(k, 7); ph++) {
+        const fn = (d) => ((d - ph) % k === 0 && d >= ph ? { ...base, [l.key]: val } : base);
+        const v = simulatePlan(t, ctx, fn, H);
+        if (v > best.v) best = { v, desc: `« ${l.label} » = ${val} tous les ${k} jours${ph ? ` (prochaine fois dans ${ph} j)` : ' (dès aujourd’hui)'}`, fn, period: k, phase: ph, lever: l.key };
+      }
+    }
+    return { ...best, gain: best.v - v0, v0 };
+  }
   const syncCoefs = (m) => m.beliefs.forEach((b, i) => { const c = m.model.cols[i]; b.coef = c >= 0 ? m.model.mn.slice(c, c + termWidth(b)) : [b.basis.ratio]; b.key = famKey(b); b.narrative = narrate(m.space, b, b.coef); });
 
   // ---------- hypothèses (par mesure) ----------
@@ -164,6 +226,27 @@ export function createBrain(body, opts = {}) {
         m.probe.budget--; note += ` EXPÉRIENCE : capacité accrue pour tester « ${FAMILY_FR[m.probe.term.family]} » sur ${m.out.label}.`;
       }
     }
+    // stratégie à plusieurs jours, découverte par simulation dans le modèle appris
+    if (o.planning && t >= WARMUP && discLevers.length) {
+      const pl = plan(t, ctx, proposal.action);
+      if (pl.desc && pl.gain > Math.max(5, 0.01 * Math.abs(pl.v0))) {
+        proposal = withCapacity(body, pl.fn(0), P, ctx);
+        A.strategy = { t, desc: pl.desc, gain: pl.gain };
+        note += ` STRATÉGIE découverte : ${pl.desc} (+${num(pl.gain)} € simulés sur ${o.horizon} j).`;
+      }
+    }
+    // curiosité : une option jamais (ou presque jamais) essayée ne peut pas être apprise
+    let curious = false;
+    if (o.curiosity && t >= 7 && t < 200 && t - A.lastCurious >= 5) {
+      for (const l of discLevers) for (const val of l.values) {
+        if ((A.tried[`${l.key}=${val}`] ?? 0) >= 2 || val === proposal.action[l.key] || curious) continue;
+        const cand = withCapacity(body, { ...proposal.action, [l.key]: val }, P, ctx);
+        if (proposal.value - cand.value < 0.15 * Math.abs(proposal.value) + 5) {
+          proposal = cand; curious = true; A.lastCurious = t;
+          note += ` CURIOSITÉ : j'essaie « ${l.label} » = ${val} (jamais ou peu essayé ; coût espéré ${num(Math.max(0, proposal.value - cand.value))} €).`;
+        }
+      }
+    }
     emit('decider', `Décision : ${levers.map((l) => `${l.label} ${num(proposal.action[l.key])}`).join(', ')} ; valeur espérée ${num(proposal.value)} €.${note}`, { action: proposal.action, mode });
 
     // SIMULER : bac à sable sur la postérieure + règle de risque
@@ -175,7 +258,7 @@ export function createBrain(body, opts = {}) {
     for (const l of decLevers) {
       const seen = A.history.map((h) => h.action[l.key]);
       if (!seen.length) continue;
-      if (l.kind === 'discrete' && !seen.includes(proposal.action[l.key])) reasons.push(`« ${l.label} » = ${proposal.action[l.key]} jamais essayé`);
+      if (l.kind === 'discrete' && !curious && !seen.includes(proposal.action[l.key])) reasons.push(`« ${l.label} » = ${proposal.action[l.key]} jamais essayé`);
       if (l.kind === 'continuous') { const lo = Math.min(...seen), hi = Math.max(...seen), v = proposal.action[l.key]; if (v < lo / 1.2 || v > hi * 1.2) reasons.push(`« ${l.label} » hors du domaine observé`); }
     }
     let action = proposal.action, how = 'auto';
@@ -202,7 +285,7 @@ export function createBrain(body, opts = {}) {
     const lines = [];
     for (const m of Object.values(M)) {
       const y = Math.log(Math.max(obs.outcomes[m.out.key], 0.5));
-      const r = { t, dow: t % 7, x: { ...a, ...ctx }, ad, y, censored: !!obs.censored[m.out.key] };
+      const r = { t, dow: t % 7, x: { ...a, ...ctx, ...derived(A.dstate, a) }, ad, y, censored: !!obs.censored[m.out.key] };
       const pr = A.today.pred[m.out.key];
       if (r.censored) impute(m, r);
       const z = (y - pr.mu) / pr.s;
@@ -232,6 +315,8 @@ export function createBrain(body, opts = {}) {
       refit(m); syncCoefs(m);
     }
     for (const l of decLevers) A.ad[l.key] = ad[l.key];
+    for (const l of discLevers) A.tried[`${l.key}=${a[l.key]}`] = (A.tried[`${l.key}=${a[l.key]}`] ?? 0) + 1;
+    A.dstate = nextState(A.dstate, a, Object.fromEntries(body.outcomes.map((x) => [x.key, Math.log(Math.max(obs.outcomes[x.key], 0.5))])));
     emit('mesurer', `Résultat : ${lines.join(', ')} ; ${num(obs.reward)} € (cumul ${num(A.cum)} €).`, { reward: obs.reward });
     emit('apprendre', `Épisode ${t} mémorisé.`);
     emit('reviser', `Postérieures mises à jour (${Object.values(M).map((m) => `${m.out.label} : ${m.model.n} obs.`).join(', ')}).`);
@@ -282,6 +367,6 @@ export function createBrain(body, opts = {}) {
   A.beliefs = () => Object.values(M).flatMap((m) => m.beliefs.map((b) => ({ ...b, outcome: m.out.key })));
   A.retracted = () => Object.values(M).flatMap((m) => m.retracted.map((b) => ({ ...b, outcome: m.out.key })));
   // log-moyenne prédite d'une mesure (régime permanent des effets retard) — pour mesurer la fidélité du modèle
-  A.predictLog = (k, t, a, ctx) => M[k].model.predict({ t, dow: t % 7, x: { ...a, ...ctx }, ad: Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: a[l.key], 0.8: a[l.key] }])) }).mu;
+  A.predictLog = (k, t, a, ctx) => M[k].model.predict({ t, dow: t % 7, x: { ...a, ...ctx, ...derived(A.dstate, a) }, ad: Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: a[l.key], 0.8: a[l.key] }])) }).mu;
   return A;
 }

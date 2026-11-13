@@ -6,23 +6,25 @@ export const FAMILY_FR = {
   level: 'rupture de niveau', trend: 'dérive progressive', slope: 'sensibilité', curvature: 'réponse non linéaire',
   threshold: 'effet de seuil', dow: 'habitude hebdomadaire', season: 'cycle annuel', pulse: 'pic récurrent',
   adstock: 'effet retard', variance: 'volatilité', end: 'fin d’un effet',
+  memory: 'mécanisme à mémoire (variable construite)', interaction: 'interaction entre deux variables',
 };
-export const FAMILIES = ['level', 'trend', 'slope', 'curvature', 'threshold', 'dow', 'season', 'pulse', 'adstock', 'variance'];
+export const FAMILIES = ['level', 'trend', 'slope', 'curvature', 'threshold', 'dow', 'season', 'pulse', 'adstock', 'variance', 'memory', 'interaction'];
 // A priori « métier » générique : les ruptures de niveau sont les changements les plus courants, puis les changements de sensibilité.
 export const FAMILY_PRIOR = { level: 3, slope: 1.5, end: 2 };
 const PERIODS = [14, 30], RATIOS = [0.3, 3.5], LAMBDAS = [0.5, 0.8], WIDTHS = [6, 12];
 
-export const famKey = (c) => (c.basis && c.basis.j != null && ['slope', 'curvature', 'threshold', 'adstock'].includes(c.family) ? `${c.family}:${c.inputKey}` : c.family);
+export const famKey = (c) => (c.basis && c.basis.j != null && ['slope', 'curvature', 'threshold', 'adstock', 'memory', 'interaction'].includes(c.family) ? `${c.family}:${c.inputKey}` : c.family);
 const sameTerm = (a, b) => famKey(a) === famKey(b) && JSON.stringify(a.basis) === JSON.stringify(b.basis) && a.gate.kind === b.gate.kind && (a.gate.kind === 'all' || Math.abs(a.gate.tau - b.gate.tau) < 10);
 
 function mk(space, family, gate, basis) {
   const c = { family, gate, basis };
-  if (basis.j != null) c.inputKey = space.inputs[basis.j].key;
+  if (basis.j != null) c.inputKey = space.inputs[basis.j].key + (basis.k != null ? `×${space.inputs[basis.k].key}` : '');
   return c;
 }
 function dated(space, family, tau) {
   const S = (basis) => mk(space, family, { kind: 'step', tau, end: null }, basis);
-  const J = space.inputs.map((_, j) => j);
+  const J = space.inputs.map((_, j) => j).filter((j) => !space.inputs[j].latent);
+  const LAT = space.inputs.map((_, j) => j).filter((j) => space.inputs[j].latent);
   switch (family) {
     case 'level': return [S({ kind: 'const' }), ...WIDTHS.map((width) => mk(space, family, { kind: 'sigmoid', tau, width, end: null }, { kind: 'const' }))];
     case 'trend': return [mk(space, family, { kind: 'ramp', tau, end: null }, { kind: 'const' })];
@@ -32,18 +34,24 @@ function dated(space, family, tau) {
     case 'dow': return [0, 1, 2, 3, 4, 5, 6].map((d) => S({ kind: 'dow', d }));
     case 'variance': return RATIOS.map((ratio) => S({ kind: 'variance', ratio }));
     case 'pulse': { const o = []; for (const period of PERIODS) for (let phase = 0; phase < period; phase++) o.push(S({ kind: 'pulse', period, phase })); return o; }
+    case 'memory': return LAT.map((j) => S({ kind: 'in', j }));
     default: return [];
   }
 }
 function structural(space, family) {
   const A = (basis) => mk(space, family, { kind: 'all' }, basis);
-  const J = space.inputs.map((_, j) => j);
+  const J = space.inputs.map((_, j) => j).filter((j) => !space.inputs[j].latent);
+  const LAT = space.inputs.map((_, j) => j).filter((j) => space.inputs[j].latent);
   switch (family) {
     case 'threshold': return J.flatMap((j) => (space.inputs[j].thetas ?? []).map((theta) => A({ kind: 'thresh', j, theta })));
     case 'curvature': return J.filter((j) => space.inputs[j].continuous).map((j) => A({ kind: 'in2', j }));
     case 'season': return [A({ kind: 'season' })];
     case 'adstock': return J.filter((j) => space.inputs[j].carry).flatMap((j) => LAMBDAS.map((lambda) => A({ kind: 'adstock', j, lambda })));
     case 'pulse': { const o = []; for (const period of PERIODS) for (let phase = 0; phase < period; phase++) o.push(A({ kind: 'pulse', period, phase })); return o; }
+    // variables construites par l'agent (mémoires, jours depuis…, valeur de la veille)
+    case 'memory': return LAT.map((j) => A({ kind: 'in', j }));
+    // interactions : l'effet d'une variable dépend d'une autre
+    case 'interaction': { const o = []; for (let a = 0; a < J.length; a++) for (let b = a + 1; b < J.length; b++) o.push(A({ kind: 'inter', j: J[a], k: J[b] })); return o; }
     default: return [];
   }
 }
@@ -77,7 +85,7 @@ export function searchExplanations(space, model, t, { warmup = 28, lookback = 60
   // cette variable VARIE là où il agit ; sinon il équivaut à une simple rupture de niveau (plus simple).
   const rows = model.rows.map((x) => x.r);
   const distinct = (c) => {
-    if (!['in', 'in2', 'thresh'].includes(c.basis?.kind)) return true;
+    if (!['in', 'in2', 'thresh', 'inter'].includes(c.basis?.kind)) return true;
     const v = [];
     for (const r of rows) if (gateValue(c.gate, r.t) > 0) v.push(basisValues(space, c.basis, r)[0]);
     if (v.length < 10) return false;
@@ -161,12 +169,19 @@ export function narrate(space, term, coef) {
       if (g.kind === 'ramp') return `${since}${until}, ${what} ${v('dérive', 'dérivent')} progressivement de ${pct(Math.exp(c) - 1)} par mois.`;
       if (g.kind === 'sigmoid') return `${since}${until}, ${what} ${v('a', 'ont')} basculé progressivement (sur ~${Math.round(4 * g.width)} jours) de ${pct(Math.exp(c) - 1)}.`;
       return `${since}${until}, ${what} ${v('a', 'ont')} ${c < 0 ? 'chuté' : 'bondi'} de ${pct(Math.exp(c) - 1)}.`;
-    case 'in': return `${since}${until}, ${what} ${v('réagit', 'réagissent')} ${c * (inp.sign ?? 1) > 0 ? 'plus fortement' : 'moins'} à « ${inp.label} » (sensibilité ${c >= 0 ? '+' : ''}${c.toFixed(2)}).`;
+    case 'in':
+      if (inp.latent) {
+        if (inp.latentKind === 'since') return `${since}${until}, tous les 10 jours sans « ${inp.of} », ${what} ${v('change', 'changent')} de ${pct(Math.exp(c * 10 / (inp.scale ?? 1)) - 1)} (accumulation : usure, oubli, encrassement…) ; l'action la remet à zéro.`;
+        if (inp.latentKind === 'lag') return `${since}${until}, ${what} ${v('dépend', 'dépendent')} de ${v('sa', 'leur')} valeur de la veille (inertie, coefficient ${c.toFixed(2)}).`;
+        return `${since}${until}, ${what} ${v('dépend', 'dépendent')} de la mémoire récente de « ${inp.of} » (persistance λ = ${inp.lambda}) : son effet s'installe et s'efface sur plusieurs jours.`;
+      }
+      return `${since}${until}, ${what} ${v('réagit', 'réagissent')} ${c * (inp.sign ?? 1) > 0 ? 'plus fortement' : 'moins'} à « ${inp.label} » (sensibilité ${c >= 0 ? '+' : ''}${c.toFixed(2)}).`;
     case 'in2': return `${since}, la réponse ${of} à « ${inp.label} » n’est pas proportionnelle (courbure ${c.toFixed(2)}).`;
     case 'thresh': return `${since}, au-delà de ${b.theta} ${inp.unit ?? ''} pour « ${inp.label} », ${what} ${v('change', 'changent')} de ${pct(Math.exp(c) - 1)} (effet de seuil).`;
     case 'dow': return `${since}, le ${DOW[b.d]}, ${what} ${v('a', 'ont')} changé de ${pct(Math.exp(c) - 1)} (habitude hebdomadaire déplacée).`;
     case 'season': { const [a, bb] = coef ?? [0, 0]; const amp = Math.hypot(a, bb); const peak = ((Math.round((Math.atan2(a, bb) * 365) / (2 * Math.PI)) % 365) + 365) % 365; return `${what} ${v('suit', 'suivent')} un cycle annuel (±${Math.round((Math.exp(amp) - 1) * 100)} %, pic vers le jour ${peak}).`; }
     case 'pulse': return `${since}, ${what} ${v('présente', 'présentent')} un pic tous les ${b.period} jours (${pct(Math.exp(c) - 1)}, ex. jour ${b.phase}).`;
+    case 'inter': return `L'effet de « ${inp.label} » sur ${what} dépend de « ${space.inputs[b.k].label} » (interaction ${c >= 0 ? '+' : ''}${c.toFixed(2)}).`;
     case 'adstock': return `« ${inp.label} » agit sur ${what} avec retard (demi-vie ≈ ${(Math.log(0.5) / Math.log(b.lambda)).toFixed(1)} j).`;
     case 'variance': return `${since}, ${what} ${v('est', 'sont')} ${b.ratio > 1 ? `${Math.sqrt(b.ratio).toFixed(1)} fois plus ${v('volatile', 'volatiles')}` : `${(1 / Math.sqrt(b.ratio)).toFixed(1)} fois plus ${v('stable', 'stables')}`}.`;
     default: return '';
