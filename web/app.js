@@ -8,7 +8,8 @@
   let S = null, playing = false, timer = null, reviewer = 'human', showTruth = false, waiting = null;
 
   function newYear(seed, prerun = 0) {
-    S = { seed, world: createWorld(seed), agent: createAgent({ seed }), ow: createWorld(seed), hw: createWorld(seed), habit: createHabit(),
+    const env = $('env').value, mk = () => createWorld(seed, ENVS[env].make(seed));
+    S = { seed, env, world: mk(), agent: createAgent({ seed }), ow: mk(), hw: mk(), habit: createHabit(),
       log: [], olog: [], hlog: [], cum: [], ocum: [], hcum: [], trace: [], reviews: { ok: 0, no: 0 }, injected: [] };
     S.oracle = createOracle(S.ow);
     waiting = null; $('review').hidden = true;
@@ -182,14 +183,15 @@
       .concat(A.retracted.map((b) => `<div class="belief gone">${esc(b.narrative || b.type)}<span class="meta">rétractée au jour ${b.retractedAt} : les données ne la soutenaient plus</span></div>`));
     $('beliefs').innerHTML = items.length ? items.join('') : `<p class="empty">Aucune rupture admise. Le monde paraît conforme au modèle de base : prix, jour de la semaine, marketing.</p>`;
   }
-  const TYPE_LABEL = { level: 'rupture de niveau', elasticity: 'changement d’élasticité', marketing: 'effet marketing modifié', end: 'fin d’un effet temporaire' };
+  const TYPE_LABEL = FAMILY_FR;
+  const when = (tau) => (tau == null ? 'depuis toujours' : `au jour ${tau}`);
   function renderHyps() {
     const h = S.agent.hypothesisLog.at(-1);
     if (!h) { $('hyps').innerHTML = '<p class="empty">Aucune contradiction pour l’instant. Les hypothèses ne sont générées que lorsque les faits contredisent la théorie.</p>'; $('hyp-sub').textContent = ''; return; }
     $('hyp-sub').textContent = `jour ${h.t} · P(changement) ${Math.round(h.pChange * 100)} %`;
-    const rows = [{ label: 'rien n’a changé (bruit)', p: 1 - h.pChange }].concat(h.top.slice(0, 4).map((c) => ({ label: `${TYPE_LABEL[c.type]} au jour ${c.tau}`, p: c.post })));
+    const rows = [{ label: 'rien n’a changé (bruit)', p: 1 - h.pChange }].concat(h.top.slice(0, 4).map((c) => ({ label: `${TYPE_LABEL[c.type]} ${when(c.tau)}`, p: c.post })));
     $('hyps').innerHTML = rows.map((r) => `<div class="hbar"><div>${esc(r.label)}<div class="track"><div class="fill" style="width:${(r.p * 100).toFixed(1)}%"></div></div></div><div class="num">${(r.p * 100).toFixed(1)} %</div></div>`).join('')
-      + `<p class="note">${h.accepted ? `Retenue : ${TYPE_LABEL[h.accepted.type]} au jour ${h.accepted.tau}.` : 'Aucune hypothèse retenue : preuves insuffisantes.'} Probabilités a posteriori exactes (vraisemblance marginale) sur ${Object.keys(h.byType).length} familles d’explications.</p>`;
+      + `<p class="note">${h.accepted ? `Retenue : ${TYPE_LABEL[h.accepted.type]} ${when(h.accepted.tau)}.` : 'Aucune hypothèse retenue : preuves insuffisantes.'} ${h.nCandidates ?? ''} explications testées sur ${Object.keys(h.byType).length} familles ; probabilités a posteriori (vraisemblance marginale, ruptures de stock comprises).</p>`;
   }
   function renderLearning() {
     const A = S.agent, sk = A.skills.order;
@@ -251,14 +253,15 @@
     // vérité
     if (showTruth) {
       g.strokeStyle = css('--oracle'); g.setLineDash([4, 4]); g.lineWidth = 1.5;
-      for (const e of S.world.scenario.events) { if (e.type === 'cost') continue; for (const d of [e.start, e.end].filter((v) => v != null)) { g.beginPath(); g.moveTo(x(d), pad.t); g.lineTo(x(d), h - pad.b); g.stroke(); } }
+      for (const e of S.world.scenario.events) { if (e.type === 'cost' || e.structural) continue; for (const d of [e.type === 'logistic' ? e.mid : e.start, e.end].filter((v) => v != null)) { g.beginPath(); g.moveTo(x(d), pad.t); g.lineTo(x(d), h - pad.b); g.stroke(); } }
       g.setLineDash([]);
     }
     // croyances
     g.strokeStyle = css('--accent'); g.fillStyle = css('--accent'); g.lineWidth = 2; g.font = `600 11px ${css('--f-body')}`; g.textAlign = 'left';
     S.agent.beliefs.forEach((b) => {
       for (const d of [b.tau, b.end].filter((v) => v != null)) { g.beginPath(); g.moveTo(x(d), pad.t); g.lineTo(x(d), h - pad.b); g.stroke(); }
-      const lab = b.type === 'level' ? `${Math.exp(b.coef) - 1 >= 0 ? '+' : ''}${Math.round((Math.exp(b.coef) - 1) * 100)} %` : b.type === 'elasticity' ? 'élasticité' : 'marketing';
+      const c0 = b.coef?.[0] ?? 0;
+      const lab = b.type === 'level' ? `${Math.exp(c0) - 1 >= 0 ? '+' : ''}${Math.round((Math.exp(c0) - 1) * 100)} %` : (FAMILY_FR[b.type] || b.type).split(' ')[0];
       g.fillText(lab, Math.min(x(b.tau) + 4, w - 70), pad.t + 10);
     });
     // ventes
@@ -312,6 +315,8 @@
   $('step1').onclick = () => { stop(); if (!waiting) startDay(); renderAll(true); };
   $('step7').onclick = () => { stop(); for (let i = 0; i < 7 && !waiting; i++) if (startDay() !== 'ok') break; renderAll(); };
   $('reset').onclick = () => { stop(); newYear(Math.max(1, Math.min(9999, +$('seed').value || 1)), 0); };
+  $('env').onchange = () => { stop(); newYear(Math.max(1, Math.min(9999, +$('seed').value || 1)), 0); };
+  $('env').innerHTML = Object.entries(ENVS).map(([k, v]) => `<option value="${k}"${k === 'marche' ? ' selected' : ''}>${v.label}</option>`).join('');
   $('rv-approve').onclick = () => decide('approve');
   $('rv-reject').onclick = () => decide('reject');
   $('inject-go').onclick = () => inject($('inject').value);
@@ -327,5 +332,6 @@
 
   buildRing();
   // État de départ réaliste : 98 jours déjà vécus (relecteur simulé), juste avant l'arrivée du concurrent.
-  newYear(1, 98);
+  // État de départ : le stand de marché, 140 jours vécus — l'habitude du samedi vient de se déplacer.
+  newYear(1, 140);
 })();

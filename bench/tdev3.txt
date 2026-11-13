@@ -1,0 +1,40 @@
+# Transfert — 240 épisodes, graines 1–6
+
+## Profit (% de l'oracle)
+
+| Politique | restaurant | calme | boulangerie | glacier | marche | fleuriste | kiosque | **Tous** |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Oracle (connaît la vérité) | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 | **100.0** |
+| Habitude (règle fixe) | 55.7 | 58.4 | 46.4 | 60.8 | 53.8 | 45.2 | 45.5 | **52.3** |
+| CORTEX v1 (spécialisé commerce, gelé) | — | 94.9 | 77.8 | 71.2 | 83.9 | 82.9 | 78.3 | **81.5** |
+| CORTEX v2 (spécialisé commerce) | — | 94.3 | 77.1 | 82.9 | 88.4 | 77.8 | 84.7 | **84.2** |
+| Cerveau générique, vocabulaire fermé (niveau + sensibilité) | 87.8 | 94.5 | 76.3 | 83.5 | 83.3 | 85.2 | 82.3 | **84.7** |
+| CORTEX v3 : cerveau générique | 87.4 | 94.0 | 77.0 | 79.3 | 86.3 | 85.2 | 82.7 | **84.5** |
+
+## Erreur du modèle du monde (RMS du log, 7 j à l'avance ; plus bas = mieux)
+
+| Politique | restaurant | calme | boulangerie | glacier | marche | fleuriste | kiosque | **Tous** |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| CORTEX v1 (spécialisé commerce, gelé) | — | 0.072 | 0.230 | 0.353 | 0.242 | 0.225 | 0.368 | **0.248** |
+| CORTEX v2 (spécialisé commerce) | — | 0.070 | 0.207 | 0.221 | 0.142 | 0.240 | 0.268 | **0.191** |
+| Cerveau générique, vocabulaire fermé (niveau + sensibilité) | 0.170 | 0.063 | 0.235 | 0.262 | 0.172 | 0.210 | 0.303 | **0.202** |
+| CORTEX v3 : cerveau générique | 0.163 | 0.066 | 0.204 | 0.242 | 0.136 | 0.224 | 0.294 | **0.190** |
+
+## Compréhension (bonne famille, bonne variable, bonne date ±14 j) et fausses découvertes
+
+| Politique | level | slope:meteo | dow | slope:price | season | threshold | trend | variance | adstock | pulse | logistic | **Compris** | Délai médian | Fausses / an |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| CORTEX v1 (spécialisé commerce, gelé) | 16/24 | — | 0/12 | 7/12 | 0/12 | 0/12 | 0/6 | 0/12 | 0/6 | 0/12 | 3/6 | **23 %** | 10 j | 1.53 |
+| CORTEX v2 (spécialisé commerce) | 17/24 | — | 10/12 | 2/12 | 5/12 | 3/12 | 3/6 | 4/12 | 2/6 | 4/12 | 2/6 | **46 %** | 16 j | 1.00 |
+| Cerveau générique, vocabulaire fermé (niveau + sensibilité) | 19/42 | 1/6 | 0/18 | 4/12 | 9/12 | 3/12 | 1/6 | 1/12 | 2/6 | 0/12 | 3/6 | **30 %** | 16 j | 1.00 |
+| CORTEX v3 : cerveau générique | 27/42 | 1/6 | 10/18 | 4/12 | 7/12 | 1/12 | 3/6 | 3/12 | 1/6 | 3/12 | 3/6 | **44 %** | 22 j | 1.12 |
+
+## Différences appariées v3 − références (IC95)
+
+| Comparaison | Profit (€/an) | Gagne | Erreur du modèle | Compréhension (pts) |
+|---|---:|---:|---:|---:|
+| v3 − CORTEX v1 (spécialisé commerce, gelé) | +2310 ± 3014 | 19/36 | -0.054 ± 0.032 | +20.8 ± 13.7 |
+| v3 − CORTEX v2 (spécialisé commerce) | +270 ± 2699 | 14/36 | +0.003 ± 0.014 | -4.2 ± 9.2 |
+| v3 − Cerveau générique, vocabulaire fermé (niveau + sensibilité) | -679 ± 4172 | 24/42 | -0.012 ± 0.014 | +14.4 ± 10.5 |
+
+Temps moyen par année (v3) : 13.8 s.
