@@ -17,8 +17,8 @@ const FORMS = {
 };
 
 // ---------- mondes P2 (vérité connue) ----------
-export function makeWorld2(seed) {
-  const cls = CLASSES[seed % 5];
+export function makeWorld2(seed, xo = {}) {
+  const cls = xo.cls ?? CLASSES[seed % 5];
   const r = makeRng(seed * 7121 + 3);
   const base = r.next() < 2 / 3 ? 'modes' : 'placebo';
   const target = r.int(0, K - 1);
@@ -41,6 +41,7 @@ export function makeWorld2(seed) {
     opts.flouLever = r.int(0, 1);
     truth = { cls, target: null, family: null, active: false, lever: opts.flouLever };
   }
+  if (xo.overrideU) opts.overrideU = xo.overrideU;
   const w = makeWorld(seed + 500000, cls === 'flou' ? 'modes' : base, opts);
   return { ...w, p2: truth };
 }
@@ -85,8 +86,8 @@ function galilee(seed, Xu, res) {
 }
 
 // ---------- chaîne complète pour un monde ----------
-export function runWorld(seed) {
-  const w = makeWorld2(seed), { Y, U } = w;
+export function runWorld(seed, hooks = {}) {
+  const w = makeWorld2(seed, hooks.world), { Y, U } = w;
   const t0 = Date.now();
   // A : P1 gelé sur les jours de A seulement
   const resA = discover({ Y: Y.slice(0, A_END), U: U.slice(0, A_END) }, { method: 'p1' });
@@ -155,8 +156,9 @@ export function runWorld(seed) {
         const rm = (f) => Math.sqrt(dC.reduce((s, t) => s + (Y[t][k] - f(t)) ** 2, 0) / dC.length);
         return { accepted: lE >= Math.log(1 / ALPHA), logE: lE, text: g.text, verdict: g.verdict, rmse0: rm((t) => dot(b0, prow(t))), rmse1: rm((t) => dot(b1, [...prow(t), z(t)])) };
       };
-      if (wantG1 || wantG3) rec.galilee = judge(galilee(seed * 10 + k, Xu, resB));
-      if (wantG2) { const perm = resB.map((_, i) => i); for (let i = perm.length - 1; i > 0; i--) { const j = Math.floor(rng.next() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; } rec.galileeMelange = judge(galilee(seed * 10 + k + 5, Xu, perm.map((i) => resB[i]))); }
+      if (wantG1 || wantG3) { const g = galilee(seed * 10 + k, Xu, resB); hooks.onFormula?.({ k, kind: 'reel', g, Xu }); rec.galilee = judge(g); }
+      if (hooks.oracleC && w.p2.cls === 'forme' && touched) rec.oracleC = judge({ f: FORMS[w.p2.form], text: 'oracle' });
+      if (wantG2) { const perm = resB.map((_, i) => i); for (let i = perm.length - 1; i > 0; i--) { const j = Math.floor(rng.next() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; } const gm = galilee(seed * 10 + k + 5, Xu, perm.map((i) => resB[i])); hooks.onFormula?.({ k, kind: 'melange', g: gm, Xu }); rec.galileeMelange = judge(gm); }
     }
     if (w.p2.cls === 'forme' && touched) { const f = FORMS[w.p2.form]; rec.oracleLogE = invariantLogE(rowsB, yB, pw, [{ cols: dW.map((t) => [f(U[t]) / 0.1]) }])[0]; }
     out.push(rec);
