@@ -1,0 +1,23 @@
+| Politique | Profit annuel moyen | Écart-type | % de l'oracle | Gagne contre « Habitude » |
+|---|---:|---:|---:|---:|
+| Oracle (voit la vérité cachée) | 61864 € | 13065 € | 100.0 % | 20/20 |
+| CORTEX complet | 48483 € | 11341 € | 78.1 % | 20/20 |
+| CORTEX sans hypothèses ni rêve | 46414 € | 11516 € | 74.5 % | 20/20 |
+| Fenêtre glissante 60 j (oubli) | 46955 € | 12014 € | 75.2 % | 20/20 |
+| CORTEX sans vigilance (pas de variation de prix) | 48033 € | 10855 € | 77.4 % | 20/20 |
+| CORTEX sans apprentissage (règles/compétences/calibration) | 48604 € | 10197 € | 78.7 % | 20/20 |
+| Habitude (prix fixe 4 €, stock moyen) | 30675 € | 5760 € | 50.0 % | — |
+
+Différences appariées (mêmes mondes, mêmes nombres aléatoires) :
+- CORTEX − sans hypothèses : +2069 € ± 1638 € (IC95), positif sur 16/20
+- CORTEX − fenêtre glissante : +1528 € ± 1649 € (IC95), positif sur 15/20
+- CORTEX − sans apprentissage : -121 € ± 1560 € (IC95), positif sur 9/20
+- CORTEX − sans vigilance : +450 € ± 1212 € (IC95), positif sur 15/20
+- CORTEX − habitude : +17808 € ± 3075 € (IC95), positif sur 20/20
+
+Découverte des ruptures cachées par CORTEX (croyance de la bonne nature à ±10 j de la vraie date) :
+- Concurrent (baisse de niveau) : détectée 19/20 — erreur de date médiane 0 j, délai médian d'admission 4 j
+- Clients plus sensibles au prix (élasticité) : détectée 7/20 — erreur de date médiane 1 j, délai médian d'admission 25 j
+- Effet viral (hausse temporaire) : détectée 9/20 — erreur de date médiane 1 j, délai médian d'admission 15 j
+- Fausses ruptures avant tout événement réel : 0 sur 20 années
+- Revues humaines (relecteur simulé) : 10.4 par an en moyenne
