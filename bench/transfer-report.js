@@ -22,7 +22,8 @@ const famOf = (e) => e.expect[0].split(':')[0] === 'slope' ? `${e.expect[0]}` : 
 function score(r) {
   const used = new Set(), ev = [];
   for (const e of r.events) {
-    const ok = r.beliefs.filter((b) => b.outcome === e.outcome && e.expect.includes(b.key) && (b.tau == null || (!e.structural && dateOk(e, b.tau))));
+    // anyDate (pré-enregistré, protocole n° 3) : un mécanisme permanent compte comme découvert quelle que soit la forme datée ou non de la croyance
+    const ok = r.beliefs.filter((b) => b.outcome === e.outcome && e.expect.includes(b.key) && (e.anyDate || b.tau == null || (!e.structural && dateOk(e, b.tau))));
     const any = r.beliefs.filter((b) => b.outcome === e.outcome && b.tau != null && !e.structural && dateOk(e, b.tau));
     ok.forEach((b) => used.add(b)); any.forEach((b) => used.add(b));
     const first = ok.sort((x, y) => x.acceptedAt - y.acceptedAt)[0];
