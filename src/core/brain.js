@@ -86,10 +86,10 @@ export function createBrain(body, opts = {}) {
   // Familles de plans : statu quo optimisé, et pour chaque levier discret, chaque valeur, chaque période
   // et chaque phase, un calendrier périodique. Chaque plan est simulé sur l'horizon dans le modèle appris
   // (état dérivé propagé jour après jour). Rien n'est spécifique à un métier.
-  function simulatePlan(t, ctx, planFn, H) {
+  function simulatePlan(t, ctx, planFn, H, predsFn = preds) {
     let st = A.dstate, total = 0;
     for (let d = 0; d < H; d++) {
-      const tt = t + d, P = preds(tt, ctx, st);
+      const tt = t + d, P = predsFn(tt, ctx, st);
       const r = withCapacity(body, planFn(d), P, ctx);
       total += Math.pow(0.995, d) * r.value;
       const logOut = Object.fromEntries(body.outcomes.map((x) => [x.key, P[x.key](r.action).mu]));
@@ -97,23 +97,40 @@ export function createBrain(body, opts = {}) {
     }
     return total;
   }
-  function plan(t, ctx, base) {
+  // un plan à plusieurs jours n'a d'intérêt que si le modèle contient un mécanisme à ÉTAT
+  const dynamicBeliefs = () => Object.values(M).some((m) => m.beliefs.some((b) => ['memory', 'adstock', 'pulse'].includes(b.family)));
+  function plan(t, ctx, today) {
     const H = o.horizon;
-    const baseFn = () => base;
-    const v0 = simulatePlan(t, ctx, baseFn, H);
-    let best = { v: v0, desc: null, fn: baseFn };
-    for (const l of discLevers) for (const val of l.values) {
-      if (val === base[l.key]) continue;
-      const constFn = () => ({ ...base, [l.key]: val });
-      const vc = simulatePlan(t, ctx, constFn, H);
-      if (vc > best.v) best = { v: vc, desc: `« ${l.label} » = ${val} en permanence`, fn: constFn };
-      for (const k of [2, 3, 4, 5, 7, 10, 14, 21]) for (let ph = 0; ph < Math.min(k, 7); ph++) {
-        const fn = (d) => ((d - ph) % k === 0 && d >= ph ? { ...base, [l.key]: val } : base);
-        const v = simulatePlan(t, ctx, fn, H);
-        if (v > best.v) best = { v, desc: `« ${l.label} » = ${val} tous les ${k} jours${ph ? ` (prochaine fois dans ${ph} j)` : ' (dès aujourd’hui)'}`, fn, period: k, phase: ph, lever: l.key };
+    // référence : l'optimum du jour pour chaque jour de semaine (le calendrier hebdomadaire est déjà géré)
+    const byDow = {};
+    for (let d = 0; d < 7; d++) { const tt = t + d; byDow[tt % 7] = d === 0 ? today : optimizeAction(body, preds(tt, ctx), ctx, { start: today }).action; }
+    const base = (d) => byDow[(t + d) % 7];
+    const v0 = simulatePlan(t, ctx, base, H);
+    let best = { v: v0, desc: null, fn: base };
+    for (const l of discLevers) {
+      const i0 = l.values.indexOf(today[l.key]);
+      const alts = [...new Set([l.values[0], l.values[i0 - 1], l.values[i0 + 1]].filter((x) => x != null && x !== today[l.key]))];
+      for (const val of alts) {
+        const over = (d) => ({ ...base(d), [l.key]: val });
+        const vc = simulatePlan(t, ctx, over, H);
+        if (vc > best.v) best = { v: vc, desc: `« ${l.label} » = ${val} en permanence`, fn: over };
+        for (const k of [3, 5, 7, 10, 14]) for (let ph = 0; ph < Math.min(k, 5); ph++) {
+          const fn = (d) => ((d - ph) % k === 0 && d >= ph ? over(d) : base(d));
+          const v = simulatePlan(t, ctx, fn, H);
+          if (v > best.v) best = { v, desc: `« ${l.label} » = ${val} tous les ${k} jours${ph ? ` (prochaine fois dans ${ph} j)` : ' (dès aujourd’hui)'}`, fn };
+        }
       }
     }
-    return { ...best, gain: best.v - v0, v0 };
+    if (!best.desc) return { gain: 0, v0 };
+    // robustesse : le gain doit se confirmer dans des mondes tirés de la postérieure (malédiction de l'optimiseur)
+    let robust = true;
+    for (let i = 0; i < 2 && robust; i++) {
+      const sp = samplePreds(t, ctx);
+      const ws = Object.fromEntries(Object.keys(sp).map((k) => [k, sp[k]]));
+      const sPreds = (tt, c, st) => { const P2 = preds(tt, c, st); return Object.fromEntries(Object.keys(P2).map((k) => [k, (a) => { const p = P2[k](a), q = ws[k](a); return { mu: p.mu + (q.mu - preds(t, c)[k](a).mu), s: p.s }; }])); };
+      if (simulatePlan(t, ctx, best.fn, H, sPreds) <= simulatePlan(t, ctx, base, H, sPreds)) robust = false;
+    }
+    return robust ? { ...best, gain: best.v - v0, v0 } : { gain: 0, v0 };
   }
   const syncCoefs = (m) => m.beliefs.forEach((b, i) => { const c = m.model.cols[i]; b.coef = c >= 0 ? m.model.mn.slice(c, c + termWidth(b)) : [b.basis.ratio]; b.key = famKey(b); b.narrative = narrate(m.space, b, b.coef); });
 
@@ -227,7 +244,7 @@ export function createBrain(body, opts = {}) {
       }
     }
     // stratégie à plusieurs jours, découverte par simulation dans le modèle appris
-    if (o.planning && t >= WARMUP && discLevers.length) {
+    if (o.planning && t >= WARMUP && discLevers.length && dynamicBeliefs()) {
       const pl = plan(t, ctx, proposal.action);
       if (pl.desc && pl.gain > Math.max(5, 0.01 * Math.abs(pl.v0))) {
         proposal = withCapacity(body, pl.fn(0), P, ctx);
