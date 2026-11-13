@@ -48,16 +48,17 @@ for (const p of agents) {
   const d = ev.filter((e) => e.delay != null).map((e) => e.delay).sort((a, b) => a - b);
   L.push(`| ${LABELS[p]} | ${fams.map((f) => { const x = ev.filter((e) => e.fam === f); return x.length ? `${x.filter((e) => e.understood).length}/${x.length}` : '—'; }).join(' | ')} | **${(100 * ev.filter((e) => e.understood).length / ev.length).toFixed(0)} %** | ${d.length ? d[Math.floor(d.length / 2)] + ' j' : '—'} | ${mean(S.map((s) => s.falses)).toFixed(2)} |`);
 }
-L.push(`\n## Différences appariées v3 − références (IC95)\n\n| Comparaison | Profit (€/an) | Gagne | Erreur du modèle | Compréhension (pts) |\n|---|---:|---:|---:|---:|`);
-for (const ref of agents.filter((p) => p !== 'v3')) {
-  const k = ks('v3').filter((k) => by[ref][k]); if (!k.length) continue;
+L.push(`\n## Différences appariées (IC95)\n\n| Comparaison | Profit (€/an) | Gagne | Erreur du modèle | Compréhension (pts) |\n|---|---:|---:|---:|---:|`);
+const MAIN = by.v4 ? 'v4' : 'v3';
+for (const ref of agents.filter((p) => p !== MAIN)) {
+  const k = ks(MAIN).filter((k) => by[ref][k]); if (!k.length) continue;
   const u = (p, kk) => { const s = score(by[p][kk]).ev; return s.length ? s.filter((e) => e.understood).length / s.length : null; };
-  const dp = k.map((kk) => by.v3[kk].reward - by[ref][kk].reward), de = k.map((kk) => by.v3[kk].rmse - by[ref][kk].rmse);
-  const du = k.map((kk) => [u('v3', kk), u(ref, kk)]).filter(([x]) => x != null).map(([x, y]) => 100 * (x - y));
+  const dp = k.map((kk) => by[MAIN][kk].reward - by[ref][kk].reward), de = k.map((kk) => by[MAIN][kk].rmse - by[ref][kk].rmse);
+  const du = k.map((kk) => [u(MAIN, kk), u(ref, kk)]).filter(([x]) => x != null).map(([x, y]) => 100 * (x - y));
   const f = (x, n = 0) => (x >= 0 ? '+' : '') + x.toFixed(n);
   const [a1, b1] = ci(dp), [a2, b2] = ci(de), [a3, b3] = ci(du);
-  L.push(`| v3 − ${LABELS[ref]} | ${f(a1)} ± ${b1.toFixed(0)} | ${dp.filter((x) => x > 0).length}/${dp.length} | ${f(a2, 3)} ± ${b2.toFixed(3)} | ${f(a3, 1)} ± ${b3.toFixed(1)} |`);
+  L.push(`| ${MAIN} − ${LABELS[ref]} | ${f(a1)} ± ${b1.toFixed(0)} | ${dp.filter((x) => x > 0).length}/${dp.length} | ${f(a2, 3)} ± ${b2.toFixed(3)} | ${f(a3, 1)} ± ${b3.toFixed(1)} |`);
 }
-L.push(`\nTemps moyen par année (v3) : ${by.v3 ? mean(Object.values(by.v3).map((r) => r.secs)).toFixed(1) : '—'} s.`);
+L.push(`\nTemps moyen par année (${MAIN}) : ${by[MAIN] ? mean(Object.values(by[MAIN]).map((r) => r.secs)).toFixed(1) : '—'} s.`);
 const out = L.join('\n'); console.log(out);
 if (argv.includes('--md')) writeFileSync(argv[argv.indexOf('--md') + 1], out + '\n');

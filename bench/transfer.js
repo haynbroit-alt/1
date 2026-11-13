@@ -7,6 +7,7 @@ import os from 'node:os';
 export const LABELS = {
   oracle: 'Oracle (connaît la vérité)', habit: 'Habitude (règle fixe)', 'v1-gele': 'CORTEX v1 (spécialisé commerce, gelé)',
   v2: 'CORTEX v2 (spécialisé commerce)', 'v3-ferme': 'Cerveau générique, vocabulaire fermé (niveau + sensibilité)', v3: 'CORTEX v3 : cerveau générique',
+  'v3-gele': 'CORTEX v3 gelé (src_v3)', 'v4-myope': 'v4 sans planification', 'v4-sansmemoire': 'v4 sans variables construites', 'v4-sanscurio': 'v4 sans curiosité', v4: 'CORTEX v4 : modèles construits + stratégies',
 };
 const V2MAP = { elasticity: 'slope:price', marketing: 'slope:marketing', threshold: 'threshold:price', curvature: 'curvature:price', adstock: 'adstock:marketing' };
 
@@ -33,9 +34,10 @@ async function runJob({ body: name, seed, policy }) {
     const nb = (b) => ({ outcome: 'sales', key: V2MAP[b.family ?? b.type] ?? (b.family ?? b.type), tau: b.gate ? (b.gate.kind === 'all' ? null : b.gate.tau) : b.tau, acceptedAt: b.acceptedAt, retractedAt: b.retractedAt ?? null });
     return { body: name, seed, policy, reward, rmse: Math.sqrt(sq.reduce((s, x) => s + x, 0) / sq.length), beliefs: [...agent.beliefs, ...agent.retracted].map(nb), events, secs: (Date.now() - t0) / 1000 };
   }
-  const { runYear } = await import('../src/core/run.js');
-  const pol = policy.startsWith('v3') ? 'brain' : policy;
-  const brainOpts = policy === 'v3-ferme' ? { families: ['level', 'slope'], omnibus: false, background: false } : {};
+  const { runYear } = policy === 'v3-gele' ? await import('../src_v3/core/run.js') : await import('../src/core/run.js');
+  const pol = policy.startsWith('v3') || policy.startsWith('v4') ? 'brain' : policy;
+  const V4 = { v4: {}, 'v4-myope': { planning: false }, 'v4-sansmemoire': { memory: false }, 'v4-sanscurio': { curiosity: false } };
+  const brainOpts = policy === 'v3-ferme' ? { families: ['level', 'slope'], omnibus: false, background: false, memory: false, planning: false, curiosity: false } : policy === 'v3' ? { memory: false, planning: false, curiosity: false } : V4[policy] ?? {};
   let runBody = body, runPol = pol;
   if (pol === 'oracle' && body.truth.oracleAdjust) {
     // oracle non myope quand le corps fournit une correction (ex. calendrier de maintenance de l'usine)
@@ -56,7 +58,7 @@ else if (process.argv[1].endsWith('transfer.js')) {
   const out = arg('--out', 'bench/transfer-dev.json');
   const jobs = [];
   for (let s = a; s <= (b ?? a); s++) for (const body of bodies) for (const policy of pols) jobs.push({ body, seed: s, policy });
-  const w8 = (j) => (j.policy === 'v3' ? 3 : j.policy === 'v3-ferme' || j.policy === 'v2' ? 2 : 1) * (j.body === 'restaurant' || j.body === 'usine' ? 2 : 1);
+  const w8 = (j) => (j.policy.startsWith('v4') ? 4 : j.policy.startsWith('v3') ? 3 : j.policy === 'v2' ? 2 : 1) * (j.body === 'restaurant' || j.body === 'usine' ? 2 : 1);
   jobs.sort((x, y) => w8(y) - w8(x));
   const results = []; let next = 0, done = 0; const t0 = Date.now();
   await Promise.all(Array.from({ length: os.cpus().length }, () => new Promise((resolve) => {

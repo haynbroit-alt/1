@@ -22,21 +22,24 @@ export function transformValue(inp, v) {
   if (inp.transform === 'log1p') return Math.log1p(Math.max(0, v) / (inp.scale ?? 1));
   return (v - (inp.ref ?? 0)) / (inp.scale ?? 1);
 }
+// Une variable « latente » (latent: true) est CONSTRUITE par l'agent (mémoire, jours depuis…, veille) :
+// elle n'entre pas dans le modèle de base, seulement comme ingrédient possible d'une explication découverte.
 export function makeSpace(outcome, inputs) {
   const idx = Object.fromEntries(inputs.map((x, i) => [x.key, i]));
+  const baseIdx = inputs.map((x, j) => (x.latent ? -1 : j)).filter((j) => j >= 0);
   return {
-    outcome, inputs, idx, nBase: 7 + inputs.length,
-    xval: (r, j) => transformValue(inputs[j], r.x[inputs[j].key]),
+    outcome, inputs, idx, nBase: 7 + baseIdx.length,
+    xval: (r, j) => transformValue(inputs[j], r.x[inputs[j].key] ?? 0),
     base(r) {
       const x = [1];
       for (let d = 1; d < 7; d++) x.push(r.dow === d ? 1 : 0);
-      for (let j = 0; j < inputs.length; j++) x.push(transformValue(inputs[j], r.x[inputs[j].key]));
+      for (const j of baseIdx) x.push(transformValue(inputs[j], r.x[inputs[j].key]));
       return x;
     },
     basePrior() {
       const m0 = [outcome.prior?.mean ?? Math.log(100)], sd = [outcome.prior?.sd ?? 3];
       for (let d = 1; d < 7; d++) { m0.push(0); sd.push(0.5); }
-      for (const inp of inputs) { m0.push(inp.prior?.mean ?? 0); sd.push(inp.prior?.sd ?? 1); }
+      for (const j of baseIdx) { const inp = inputs[j]; m0.push(inp.prior?.mean ?? 0); sd.push(inp.prior?.sd ?? 1); }
       return { m0, sd };
     },
   };
@@ -62,6 +65,7 @@ export function basisValues(space, b, r) {
     case 'dow': return [r.dow === b.d ? 1 : 0];
     case 'season': return [Math.sin((2 * Math.PI * r.t) / 365), Math.cos((2 * Math.PI * r.t) / 365)];
     case 'pulse': return [(((r.t - b.phase) % b.period) + b.period) % b.period === 0 ? 1 : 0];
+    case 'inter': return [space.xval(r, b.j) * space.xval(r, b.k)];
     case 'adstock': {
       const inp = space.inputs[b.j], cur = r.x[inp.key], st = r.ad?.[inp.key]?.[b.lambda] ?? cur;
       return [transformValue(inp, st) - transformValue(inp, cur)];
@@ -84,7 +88,7 @@ export function varianceWeight(t, terms) {
 }
 
 export const S0 = 0.15;
-const TERM_SD = { const: 0.7, in: 0.7, in2: 0.7, thresh: 0.7, dow: 0.5, season: 0.5, pulse: 0.7, adstock: 0.7 };
+const TERM_SD = { const: 0.7, in: 0.7, in2: 0.7, thresh: 0.7, dow: 0.5, season: 0.5, pulse: 0.7, adstock: 0.7, inter: 0.5 };
 export function priorFor(space, terms) {
   const { m0, sd } = space.basePrior();
   for (const term of terms) {

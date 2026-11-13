@@ -1,8 +1,60 @@
-# CORTEX — une boucle cognitive qui découvre des changements qu'on ne lui a jamais décrits
+# CORTEX — une boucle cognitive qui découvre et pilote des entreprises qu'on ne lui a jamais décrites
 
 CORTEX implémente la boucle **Observer → Comprendre → Confronter → (Hypothèses) → Anticiper → Prioriser → Décider → Simuler → Exécuter | Revue → Mesurer → Apprendre → Réviser → Dreaming ↺** sous forme de moteur bayésien exact, déterministe et testé, **sans LLM à l'exécution et sans intervention humaine** dans le banc d'essai.
 
 L'agent dirige un commerce (prix, commande d'un produit périssable, marketing) sans savoir lequel. Il ne voit que ses propres décisions et ses ventes. Quand il est en rupture de stock, il ne voit pas la demande réelle. Les règles cachées changent au cours de l'année.
+
+## v3 : un même cerveau pour des entreprises différentes
+
+**La question posée :** CORTEX peut-il comprendre et piloter un restaurant, une usine ou une entreprise inconnue *sans qu'on lui reconstruise le cerveau* ?
+
+**Ce qui a été construit.** Le cerveau (`src/core/`) est séparé du **corps**. Un corps n'est qu'une *déclaration* :
+
+- ses leviers (continus, discrets, ou de « capacité » comme un stock ou une préparation) ;
+- ses informations du matin ;
+- ses mesures et les variables qui peuvent les influencer ;
+- sa comptabilité (une fonction action, mesures → €).
+
+Le cerveau en déduit tout le reste :
+
+- un modèle bayésien par mesure ;
+- une grammaire d'hypothèses **déclencheur × mécanisme × variable quelconque**, avec un déclencheur sigmoïde pour les transitions progressives ;
+- des décisions qui maximisent la comptabilité déclarée, par simulation (sans aucune formule de métier) ;
+- un apprentissage actif ciblé sur un levier, une sélection d'hypothèses qui tient compte des plafonds, un filtre d'identifiabilité et une narration accordée à la déclaration du corps.
+
+**Protocole** ([`PREREGISTRATION_V3.md`](PREREGISTRATION_V3.md)) :
+
+1. Gel du cerveau au commit `3229694`.
+2. **Ensuite seulement**, écriture de deux entreprises jamais vues : une **usine** (cadence, heures supplémentaires, maintenance ; pièces conformes et rebuts ; usure cachée) et un **service d'abonnement** (prix, publicité, essai gratuit ; inscriptions et résiliations ; un mécanisme hors grammaire). `git diff 3229694 9e5683e -- src/core` est vide.
+3. Évaluation unique sur les graines 101 à 130 : 1 440 années simulées, aucune intervention humaine.
+
+Résultats complets : [`bench/V3_TEST_RESULTS.md`](bench/V3_TEST_RESULTS.md) · nouveaux corps seuls : [`bench/V3_TEST_NOUVEAUX.md`](bench/V3_TEST_NOUVEAUX.md) · développement : [`bench/V3_DEV_RESULTS.md`](bench/V3_DEV_RESULTS.md)
+
+### Verdict des hypothèses pré-enregistrées
+
+| | Mesure | Verdict |
+|---|---|---|
+| **T1** gérer une entreprise inconnue (v3 > habitude et ≥ 75 % de l'oracle) | Abonnement : **95,8 %** de l'oracle (habitude 35,1 %). Usine : **25,5 %** (habitude 27,3 %). Moyenne 60,6 % | ❌ **échec** (réussite nette sur l'abonnement, échec sur l'usine) |
+| **T2** la compréhension se transfère (v3 > vocabulaire fermé, nouveaux corps) | 56 % contre 49 %, +5,8 ± 5,4 pts | ✅ confirmé, de justesse |
+| **T3** modèle du monde plus fidèle (nouveaux corps) | −0,010 ± 0,017 | ❌ non significatif |
+| **T4** ≤ 1,5 fausse découverte par an (nouveaux corps) | 3,38 par an | ❌ échec |
+| **R1** pas plus de 5 points sous v2 en compréhension (commerce) | −2,4 ± 5,0 pts (borne basse −7,4) | ❌ non démontré |
+| **R2** régressions demandées : sensibilité au prix · déclin en S | v1 28/60 · v2 18/60 · **v3 16/60** ; v1 26/30 · v2 12/30 · **v3 14/30** | ❌ **non corrigées** au test, bien que le développement l'ait laissé espérer |
+
+### Ce qui fonctionne
+- **Un seul cerveau, inchangé, pilote neuf entreprises différentes**, dont trois sans prix de vente ni stock de pain (restaurant 86,7 %, abonnement 95,8 %). Il atteint le niveau de la v2 spécialisée en compréhension sur l'ensemble (49 % contre 49 %), avec un modèle du monde plus fidèle (0,214 contre 0,242 pour la v1) et +25 points de compréhension face à la v1.
+- Sur les entreprises inconnues, il découvre des mécanismes jamais décrits : la **nouvelle équipe de nuit du vendredi** (28/30), le **concurrent qui rend les clients sensibles au prix** (22/30), la panne et le fournisseur défaillant (ruptures de niveau).
+
+### Ce qui échoue, et pourquoi
+- **L'usine révèle une limite de fond : CORTEX décide jour par jour.** Une maintenance coûte aujourd'hui et ne rapporte que plus tard ; il n'en fait que 2 par an, l'usure s'accumule et il fait moins bien que l'habitude. Sa grammaire n'a pas non plus de mécanisme d'*usure cumulée depuis la dernière action*. Il l'explique donc à tort par un cycle annuel ou des tendances, ce qui produit l'essentiel des fausses découvertes.
+- **L'usure progressive de l'effet publicitaire** (hors grammaire : une sensibilité qui décroît en S) n'est jamais comprise (0/30).
+- **Sensibilité au prix et déclin en S** : les corrections (déclencheur sigmoïde, expériences ciblées, identifiabilité) amélioraient le développement mais pas le test.
+- Plus de familles signifie plus de concurrence entre explications, d'où des ruptures de niveau un peu moins bien comprises que le vocabulaire fermé (208/330 contre 227/330), et un profit inférieur à celui-ci sur l'ensemble (−2,7 k€ ± 1,6 k€).
+
+### Prochaines étapes que ces résultats désignent
+1. **Planifier sur plusieurs jours** (valeur d'un état futur : usure, stock d'abonnés), et pas seulement maximiser la journée.
+2. Ajouter à la grammaire des mécanismes **à mémoire longue** (cumul depuis la dernière action d'un levier) et des **sensibilités à transition progressive**.
+3. Renforcer le contrôle des fausses découvertes quand le modèle est mal spécifié.
 
 ## v2 : de trois explications codées en dur à une grammaire d'explications
 
@@ -64,7 +116,7 @@ Résultats complets : [`bench/TEST_RESULTS.md`](bench/TEST_RESULTS.md) · kiosqu
 
 ## Reproduire
 ```
-npm test                                   # 24 tests (inférence, découverte, Tobit/ADF, absence de faux positifs…)
+npm test                                   # 31 tests (inférence, découverte, Tobit/ADF, absence de faux positifs…)
 node bench/discovery.js --seeds 101-130 --envs calme,boulangerie,glacier,marche,fleuriste,kiosque --out bench/test.json
 node bench/report.js bench/test.json       # ≈ 30 min sur 4 cœurs
 npm run build                              # page autonome dist/cortex.html (choix du commerce, vérité cachée révélable)
@@ -72,7 +124,9 @@ npm run build                              # page autonome dist/cortex.html (cho
 
 ## Structure
 ```
-src/        model (NIG pondéré, termes, score Tobit/ADF) · discovery (grammaire, a priori hiérarchique, narration)
+src/core/   CERVEAU GÉNÉRIQUE v3 : gmodel (modèle par mesure), gdiscovery (grammaire), decide (décision par simulation), brain (la boucle), run
+src/bodies/ corps déclarés : commerce, restaurant, usine, abonnement (les deux derniers écrits après le gel)
+src/        (v2) model (NIG pondéré, termes, score Tobit/ADF) · discovery (grammaire, a priori hiérarchique, narration)
             agent (la boucle) · world (mécanismes cachés) · envs (commerces + environnement tenu secret) · econ · policies · runner
 src_v1/     CORTEX v1 gelé (copie exacte du commit fusionné 25ad9f7), référence du banc d'essai
 bench/      discovery.js (banc parallèle) · report.js (analyse) · résultats DEV/TEST · bench.js (banc v1)
