@@ -4,6 +4,61 @@ CORTEX implémente la boucle **Observer → Comprendre → Confronter → (Hypot
 
 L'agent dirige un commerce (prix, commande d'un produit périssable, marketing) sans savoir lequel. Il ne voit que ses propres décisions et ses ventes. Quand il est en rupture de stock, il ne voit pas la demande réelle. Les règles cachées changent au cours de l'année.
 
+## v5 : quatre capacités ajoutées à la v4 — évaluation pré-enregistrée n° 4
+
+La v4 avait échoué à toutes ses hypothèses sur des activités inconnues. La v5 garde tous les mécanismes de la v4 et ajoute quatre capacités, chacune désactivable pour être mesurée :
+- **C1** : explorer une option incertaine quand l'information vaut le coût ;
+- **C2** : inventer des variables cachées (accumulations et mémoires lentes de mesures et de leviers) ;
+- **C3** : remettre en cause une stratégie dont les résultats dérivent ;
+- **C4** : dire « je ne comprends pas » quand le modèle ne bat plus une prévision naïve.
+
+C3 nuisait au profit en développement : elle a été désactivée avant le gel et n'est évaluée qu'en variante.
+
+**Protocole** (`PREREGISTRATION_V5.md`) :
+- gel `a03ba73` ;
+- trois activités nouvelles écrites ensuite, dans `e26d751` : brasserie, centre d'appels, location de vélos ;
+- analyse écrite avant l'exécution ;
+- une seule exécution, sur les graines 401 à 430, jamais utilisées : 810 années simulées.
+
+Résultats complets : [`bench/v5-test.md`](bench/v5-test.md).
+
+| Hypothèse (IC95 apparié) | Résultat | Verdict |
+|---|---:|---|
+| G1 : profit v5 > v4 | +13,1 ± 18,2 k€/an (65,8 % contre 62,3 % de l'oracle) | ❌ non démontré |
+| G2 : profit v5 > habitude | +18,7 ± 14,7 k€/an | ✅, mais ❌ sur les vélos (−45 k€) |
+| E1 (C1) : l'exploration augmente le profit | +30,5 ± 23,9 k€/an (porté par le centre d'appels : +91 k€) | ✅ |
+| E2a (C2) : les variables inventées réduisent l'erreur | −0,029 ± 0,044 | ❌ |
+| E2b (C2) : v5 découvre des mécanismes que la v4 ne peut pas représenter | +0,40 ± 0,10 mécanisme/an | ✅ |
+| E4 (C4) : moins de fausses découvertes | −0,47 ± 0,44 /an | ✅ (de justesse) |
+| S : au plus 2 fausses découvertes/an/activité | 3,9 · 6,0 · 2,1 | ❌ |
+| E4b (C4) : plus d'incompréhension là où un mécanisme est hors de portée | −33 ± 9 jours (sens **inverse**) | ❌ réfuté |
+| C3 (rapporté) | −4,1 ± 13,5 k€/an | rejet confirmé |
+
+**Ce qui est démontré.** Dans deux activités sur trois, CORTEX a inventé lui-même une variable qui n'existe dans aucune donnée et qu'aucune règle ne nomme :
+- **brasserie** : la réputation, mémoire lente des plaintes, trouvée dans 50 % des années ;
+- **centre d'appels** : la file d'attente, accumulation des appels reçus moins les appels traités, trouvée dans 67 % des années.
+
+La v3, la v4 et la v5 privée de C2 ne la trouvent jamais : 0 %. L'exploration (C1) a aussi fait découvrir la rupture de sensibilité au prix de la brasserie (77 % des années contre 47 %), et elle rapporte nettement sur le centre d'appels.
+
+**Ce qui échoue.**
+1. **Vélos.** Toutes les versions de CORTEX font moins de la moitié de l'oracle (45 à 49 %), contre 90 % pour l'habitude. C'est un échec de maîtrise, pas seulement de compréhension. Le bouche-à-oreille, mémoire très lente λ = 0,97, n'est presque jamais trouvé (3 %).
+2. **C4 ne signale pas ce qu'il devait signaler.** L'incompréhension se concentre sur les pannes de vélos, un mécanisme approximable (148 jours), et sur les abandons du centre (54 jours). Elle est faible sur la brasserie, où se trouve le régime caché hors de portée (15 jours). Le test d'adéquation détecte une mauvaise prévision, pas un mécanisme hors de portée.
+3. **Trop de fausses découvertes.** Il y en a moins que pour la v4 (4,7 · 9,7 · 2,5), mais le garde-fou S est dépassé dans deux activités.
+4. **Régressions par rapport à la v4** sur ce qu'elle savait déjà faire :
+   - pannes croissantes sans réparateur : 23 % contre 40 % ;
+   - effet de la formation : 10 % contre 17 % ;
+   - profit de la brasserie : 81 % contre 85 %, non significatif.
+
+   La v5 sans C2 fait 89 % sur la brasserie : la combinatoire des variables inventées a un coût.
+5. **Temps de calcul** : 46,7 s par année simulée, contre 31,2 s pour la v4.
+
+**Conclusion honnête.** La v5 ne prouve pas qu'elle maîtrise mieux des activités inconnues que la v4 (G1 non démontré). Elle prouve une capacité nouvelle et vérifiable : inventer des variables cachées que personne ne lui a données, et les retrouver sur des données qu'elle n'a pas servi à concevoir. Le prochain travail doit corriger trois faiblesses sans toucher à cet acquis :
+- la maîtrise des effets très lents (vélos) ;
+- un test d'incompréhension qui distingue « mal estimé » de « hors de portée » ;
+- le contrôle des fausses découvertes.
+
+Il doit aussi supprimer les régressions sur ce que la v4 savait faire. Il sera évalué par un nouveau protocole, sans jamais réajuster quoi que ce soit sur les graines 401 à 430.
+
 ## v4 : variables construites et stratégies découvertes — et le test décisif
 
 **Ce qui a été ajouté** (`src/core/`, gelé au commit `a7d0da6`, protocole [`PREREGISTRATION_V4.md`](PREREGISTRATION_V4.md)) :
