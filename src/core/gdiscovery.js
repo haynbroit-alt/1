@@ -47,7 +47,18 @@ function structural(space, family) {
 }
 const COARSE = { pulse: 3 };
 
-export function searchExplanations(space, model, t, { warmup = 28, lookback = 60, stepTau = 3, minDays = 60, families = FAMILIES } = {}) {
+// seuils candidats placés là où sont les données : déciles des valeurs observées de chaque variable
+export function adaptThetas(space, records) {
+  space.inputs.forEach((inp) => {
+    const v = records.map((r) => r.x[inp.key]).filter((x) => x != null).sort((a, b) => a - b);
+    if (v.length < 20 || v[0] === v[v.length - 1]) { inp.thetas = []; return; }
+    const th = [0.1, 0.25, 0.4, 0.55, 0.7, 0.85].map((q) => v[Math.floor(q * (v.length - 1))]);
+    inp.thetas = [...new Set(th.map((x) => Math.round(x * 100) / 100))].filter((x) => x < v[v.length - 1]);
+  });
+}
+
+export function searchExplanations(space, model, t, { warmup = 28, lookback = 60, stepTau = 3, minDays = 60, families = FAMILIES, records = null } = {}) {
+  if (records) adaptThetas(space, records);
   const terms = model.terms, cands = [];
   const lo = Math.max(warmup, t - lookback), hi = t - 3;
   for (const f of families) {
@@ -81,7 +92,10 @@ export function searchExplanations(space, model, t, { warmup = 28, lookback = 60
   }
   const byFam = {};
   for (const c of pool) (byFam[famKey(c)] ??= []).push(c);
-  const weight = (k) => FAMILY_PRIOR[k.split(':')[0]] ?? 1;
+  // la masse a priori d'une NATURE de changement ne grandit pas avec le nombre de variables du corps :
+  // elle est partagée entre les variables (sensibilité au prix, à l'effectif… se partagent « sensibilité »)
+  const nPer = {}; for (const k of Object.keys(byFam)) nPer[k.split(':')[0]] = (nPer[k.split(':')[0]] || 0) + 1;
+  const weight = (k) => (FAMILY_PRIOR[k.split(':')[0]] ?? 1) / nPer[k.split(':')[0]];
   const wsum = Object.keys(byFam).reduce((s, k) => s + weight(k), 0);
   const scores = [model.logML + Math.log(0.5)];
   for (const c of pool) { c.logPrior = Math.log((0.5 * weight(famKey(c))) / wsum / byFam[famKey(c)].length); scores.push(c.logML + c.logPrior); }
@@ -93,13 +107,13 @@ export function searchExplanations(space, model, t, { warmup = 28, lookback = 60
   return { pNull: Math.exp(scores[0] - mx) / Z, famMass, top: pool.slice(0, 8), all: pool.filter((c) => c.exact), nCandidates };
 }
 
-export function alternatives(space, term, t = null) {
+export function alternatives(space, term, t = null, families = FAMILIES) {
   const out = [];
   // une composante « depuis toujours » doit aussi affronter des explications DATÉES (sinon son avantage
   // a priori — aucune date à estimer — la protège à tort) : grille hebdomadaire de dates
-  if (term.gate.kind === 'all' && t != null) for (let tau = 28; tau <= t - 7; tau += 7) for (const f of ['level', 'trend', 'slope']) for (const c of dated(space, f, tau)) out.push(c);
-  if (term.gate.kind !== 'all') for (const f of FAMILIES) for (const c of dated(space, f, term.gate.tau)) if (JSON.stringify(c.basis) !== JSON.stringify(term.basis) || c.gate.kind !== term.gate.kind) out.push({ ...c, gate: { ...c.gate, end: term.gate.end ?? null } });
-  for (const f of FAMILIES) if (f !== 'pulse') for (const c of structural(space, f)) if (JSON.stringify(c.basis) !== JSON.stringify(term.basis)) out.push(c);
+  if (term.gate.kind === 'all' && t != null) for (let tau = 28; tau <= t - 7; tau += 7) for (const f of ['level', 'trend', 'slope'].filter((x) => families.includes(x))) for (const c of dated(space, f, tau)) out.push(c);
+  if (term.gate.kind !== 'all') for (const f of families) for (const c of dated(space, f, term.gate.tau)) if (JSON.stringify(c.basis) !== JSON.stringify(term.basis) || c.gate.kind !== term.gate.kind) out.push({ ...c, gate: { ...c.gate, end: term.gate.end ?? null } });
+  for (const f of families) if (f !== 'pulse') for (const c of structural(space, f)) if (JSON.stringify(c.basis) !== JSON.stringify(term.basis)) out.push(c);
   return out;
 }
 

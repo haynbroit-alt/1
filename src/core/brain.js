@@ -4,7 +4,7 @@
 // Simuler → Exécuter | Revue → Mesurer → Apprendre → Réviser → Dreaming.
 import { makeRng, normCdf } from '../rng.js';
 import { makeSpace, fit, termWidth, termValues, varianceWeight } from './gmodel.js';
-import { searchExplanations, alternatives, narrate, famKey, FAMILY_FR } from './gdiscovery.js';
+import { searchExplanations, alternatives, narrate, famKey, FAMILY_FR, FAMILIES } from './gdiscovery.js';
 import { optimizeAction, withCapacity, expectedReward, leverGrid } from './decide.js';
 
 export const STAGES = [
@@ -20,7 +20,8 @@ const num = (x) => (Math.abs(x) >= 100 ? Math.round(x).toString() : x.toFixed(2)
 const truncMean = (a) => Math.exp(-0.5 * a * a) / Math.sqrt(2 * Math.PI) / Math.max(1e-9, 1 - normCdf(a));
 
 export function createBrain(body, opts = {}) {
-  const o = { seed: 1, discovery: true, background: true, omnibus: true, vigilance: true, window: null, families: undefined, ...opts };
+  const o = { seed: 1, discovery: true, background: true, omnibus: true, vigilance: true, window: null, ...opts };
+  o.families ??= FAMILIES;
   const rng = makeRng(o.seed * 7919 + 3);
   const levers = body.levers, ctxDefs = body.context ?? [];
   const decLevers = levers.filter((l) => l.kind !== 'capacity');
@@ -100,7 +101,7 @@ export function createBrain(body, opts = {}) {
       if (!(lvlA || prA || surA)) continue;
       emit('confronter', `Contradiction sur « ${m.out.label} » : ${[lvlA && 'écart durable à la théorie', prA && `erreurs corrélées à « ${m.space.inputs.find((x) => x.key === prA[0]).label} »`, surA && 'surprise anormale (mécanisme inconnu ?)'].filter(Boolean).join(' ; ')}.`, { outcome: m.out.key, verdict: 'contradiction' });
       if (!o.discovery) { m.cusum = { pos: 0, neg: 0 }; m.ec = {}; m.vc = 0; continue; }
-      const H = searchExplanations(m.space, m.model, t, { warmup: WARMUP, families: o.families });
+      const H = searchExplanations(m.space, m.model, t, { warmup: WARMUP, families: o.families, records: data(m) });
       const r = adjudicate(m, t, H, P_CONTRA, 'contradiction');
       const famTxt = r.fams.slice(0, 3).map(([k, v]) => `${FAMILY_FR[k.split(':')[0]]}${k.includes(':') ? ' (' + k.split(':')[1] + ')' : ''} ${Math.round(v * 100)} %`).join(', ');
       emit('hypotheses', r.accepted ? `Pourquoi ? ${r.accepted.narrative} (${H.nCandidates} explications testées ; P = ${(r.pChange * 100).toFixed(1)} % ; ${famTxt}).` : `Pourquoi ? ${H.nCandidates} explications testées pour « ${m.out.label} » (${famTxt}) : P(changement) ${Math.round(r.pChange * 100)} %, insuffisant.`, { outcome: m.out.key, accepted: r.accepted, pChange: r.pChange, nCandidates: H.nCandidates });
@@ -240,7 +241,7 @@ export function createBrain(body, opts = {}) {
           let best = { term: b, ml: withB };
           const consider = (v, margin) => { const ml = mw.scoreCandidate(v).logML; if (ml > best.ml + margin) best = { term: v, ml }; };
           if (b.gate.kind !== 'all') for (let tau = Math.max(WARMUP, b.gate.tau - 10); tau <= Math.min(t - 2, b.gate.tau + 10); tau++) if (tau !== b.gate.tau && !(b.gate.end != null && tau >= b.gate.end - 2)) consider({ ...b, gate: { ...b.gate, tau } }, 1);
-          if (t - b.acceptedAt >= 5) for (const alt of alternatives(m.space, best.term, t)) consider(alt, b.gate.kind === 'all' ? 3 : 2);
+          if (t - b.acceptedAt >= 5) for (const alt of alternatives(m.space, best.term, t, o.families)) consider(alt, b.gate.kind === 'all' ? 3 : 2);
           if (best.term !== b) {
             const v = best.term;
             if (famKey(v) !== famKey(b) || JSON.stringify(v.basis) !== JSON.stringify(b.basis) || v.gate.kind !== b.gate.kind) notes.push(`${m.out.label} : croyance #${b.id} REQUALIFIÉE (${FAMILY_FR[b.family]} → ${FAMILY_FR[v.family]})`);
@@ -252,7 +253,7 @@ export function createBrain(body, opts = {}) {
         }
         syncCoefs(m);
         if (o.background && t >= WARMUP + 14) {
-          const H = searchExplanations(m.space, m.model, t + 1, { warmup: WARMUP, lookback: 63, families: o.families });
+          const H = searchExplanations(m.space, m.model, t + 1, { warmup: WARMUP, lookback: 63, families: o.families, records: data(m) });
           const r = adjudicate(m, t, H, P_BACK, 'background');
           if (r.accepted) notes.push(`DÉCOUVERTE sur ${m.out.label} : ${r.accepted.narrative}`);
         }
