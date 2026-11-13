@@ -31,30 +31,51 @@ export function defaultScenario(seed) {
   };
 }
 
+const sig = (x) => 1 / (1 + Math.exp(-x));
+
 export function createWorld(seed = 1, scenario = defaultScenario(seed)) {
   const sc = structuredClone(scenario);
   // Nombres aléatoires communs : pré-tirés par jour, indépendants des actions.
   const nr = makeRng(seed * 104729 + 7);
   const noise = [], unif = [];
   for (let t = 0; t < 2000; t++) { noise.push(nr.normal()); unif.push(nr.next()); }
+  // pics récurrents avec aléa de date : jours pré-tirés
+  const jr = makeRng(seed * 7 + 99);
+  for (const e of sc.events) if (e.type === 'pulse' && e.jitter && !e.days) {
+    e.days = [];
+    for (let d = e.phase; d < 2000; d += e.period) e.days.push(d + jr.int(-e.jitter, e.jitter));
+  }
+  let adState = 0; // stock publicitaire réel (mécanisme d'effet retard)
 
+  const on = (e, t) => t >= (e.start ?? 0) && (e.end == null || t < e.end);
   const w = {
     seed, scenario: sc, t: 0,
     dow: (t) => t % 7,
     cost(t) { let c = sc.baseCost; for (const e of sc.events) if (e.type === 'cost' && t >= e.start) c = e.value; return c; },
-    logRate(t, price, marketing) {
-      let beta = sc.beta, lvl = sc.alpha;
+    // log du taux de demande. steady=true : marketing supposé constant (régime permanent de l'effet retard)
+    logRate(t, price, marketing, steady = false) {
+      let beta = sc.beta, lvl = sc.alpha, dow = DOW_LOG[t % 7], mEff = marketing;
+      const lp = Math.log(price / P_REF);
       for (const e of sc.events) {
-        const on = t >= e.start && (e.end == null || t < e.end);
-        if (!on) continue;
-        if (e.type === 'level') lvl += e.mag;
-        if (e.type === 'elasticity') beta += e.mag;
+        switch (e.type) {
+          case 'level': if (on(e, t)) lvl += e.mag; break;
+          case 'elasticity': if (on(e, t)) beta += e.mag; break;
+          case 'dow': if (on(e, t)) dow += e.shift[t % 7]; break;
+          case 'trend': if (t >= e.start) lvl += e.perDay * (Math.min(t, e.end ?? Infinity) - e.start); break;
+          case 'logistic': lvl += e.mag * sig((t - e.mid) / e.width); break;
+          case 'threshold': if (on(e, t)) lvl += e.soft ? e.mag * sig((price - e.theta) / e.soft) : price > e.theta ? e.mag : 0; break;
+          case 'pulse': if (on(e, t) && (e.days ? e.days.includes(t) : (t - e.phase) % e.period === 0)) lvl += e.mag; break;
+          case 'season': lvl += e.amp * Math.cos((2 * Math.PI * (t - e.peak)) / 365); break;
+          case 'adstock': if (on(e, t) && !steady) mEff = (1 - e.lambda) * marketing + e.lambda * adState; break;
+          default: break;
+        }
       }
-      return lvl + beta * Math.log(price / P_REF) + DOW_LOG[t % 7] + sc.gamma * Math.log1p(marketing / 10);
+      return lvl + beta * lp + dow + sc.gamma * Math.log1p(mEff / 10);
     },
-    trueBeta(t) { let b = sc.beta; for (const e of sc.events) if (e.type === 'elasticity' && t >= e.start) b += e.mag; return b; },
+    noiseSd(t) { let s = sc.noise; for (const e of sc.events) if (e.type === 'variance' && on(e, t)) s *= e.factor; return s; },
+    trueBeta(t) { let b = sc.beta; for (const e of sc.events) if (e.type === 'elasticity' && on(e, t)) b += e.mag; return b; },
     demand(t, price, marketing) {
-      const lam = Math.exp(w.logRate(t, price, marketing) + sc.noise * noise[t]);
+      const lam = Math.exp(w.logRate(t, price, marketing) + w.noiseSd(t) * noise[t]);
       return poissonInv(lam, unif[t]);
     },
     // Exécute une journée. action = {price, marketing, order}
@@ -67,11 +88,13 @@ export function createWorld(seed = 1, scenario = defaultScenario(seed)) {
       const D = w.demand(t, price, marketing);
       const sales = Math.min(D, order);
       const profit = price * sales - cost * order - marketing - FIXED_COST;
+      const ad = sc.events.find((e) => e.type === 'adstock' && on(e, t));
+      adState = ad ? (1 - ad.lambda) * marketing + ad.lambda * adState : marketing;
       w.t++;
       return { t, dow: t % 7, price, marketing, order, cost, sales, censored: sales >= order, waste: order - sales, profit, _demand: D };
     },
     inject(e) { sc.events.push({ ...e }); },
-    activeEvents(t) { return sc.events.filter((e) => t >= e.start && (e.end == null || t < e.end)); },
+    activeEvents(t) { return sc.events.filter((e) => on(e, t)); },
   };
   return w;
 }

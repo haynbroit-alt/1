@@ -1,4 +1,4 @@
-<title>CORTEX Boulangerie</title>
+<title>CORTEX Découverte</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -126,8 +126,8 @@ footer.how b { color: var(--ink); }
   <header class="top">
     <div class="brand">
       <div class="eyebrow">Boucle cognitive autonome · moteur bayésien exact · aucun LLM à l'exécution</div>
-      <h1>CORTEX <span>Boulangerie</span></h1>
-      <p>Un agent dirige une boulangerie dont les règles cachées changent. Il observe, confronte les faits à sa théorie, formule des hypothèses, simule avant d'agir et vous demande votre avis quand le risque est élevé.</p>
+      <h1>CORTEX <span>v2</span></h1>
+      <p>Un agent dirige un commerce dont les règles cachées changent d’une manière qu’on ne lui a jamais décrite. Il observe, confronte les faits à sa théorie, formule des hypothèses, simule avant d'agir et vous demande votre avis quand le risque est élevé.</p>
     </div>
     <div class="controls">
       <button class="btn primary" id="play" type="button">▶ Lancer</button>
@@ -135,6 +135,7 @@ footer.how b { color: var(--ink); }
       <button class="btn" id="step7" type="button">+1 semaine</button>
       <div class="ctl-group"><label for="speed">Vitesse</label>
         <select id="speed"><option value="slow">Pas à pas commenté</option><option value="normal" selected>Normale</option><option value="fast">Rapide</option></select></div>
+      <div class="ctl-group"><label for="env">Commerce</label><select id="env"></select></div>
       <div class="ctl-group"><label for="seed">Monde n°</label><input id="seed" type="number" min="1" max="9999" value="1"><button class="btn" id="reset" type="button">Nouvelle année</button></div>
     </div>
   </header>

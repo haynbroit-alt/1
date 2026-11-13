@@ -1,4 +1,4 @@
-<title>CORTEX Boulangerie</title>
+<title>CORTEX Découverte</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -126,8 +126,8 @@ footer.how b { color: var(--ink); }
   <header class="top">
     <div class="brand">
       <div class="eyebrow">Boucle cognitive autonome · moteur bayésien exact · aucun LLM à l'exécution</div>
-      <h1>CORTEX <span>Boulangerie</span></h1>
-      <p>Un agent dirige une boulangerie dont les règles cachées changent. Il observe, confronte les faits à sa théorie, formule des hypothèses, simule avant d'agir et vous demande votre avis quand le risque est élevé.</p>
+      <h1>CORTEX <span>v2</span></h1>
+      <p>Un agent dirige un commerce dont les règles cachées changent d’une manière qu’on ne lui a jamais décrite. Il observe, confronte les faits à sa théorie, formule des hypothèses, simule avant d'agir et vous demande votre avis quand le risque est élevé.</p>
     </div>
     <div class="controls">
       <button class="btn primary" id="play" type="button">▶ Lancer</button>
@@ -135,6 +135,7 @@ footer.how b { color: var(--ink); }
       <button class="btn" id="step7" type="button">+1 semaine</button>
       <div class="ctl-group"><label for="speed">Vitesse</label>
         <select id="speed"><option value="slow">Pas à pas commenté</option><option value="normal" selected>Normale</option><option value="fast">Rapide</option></select></div>
+      <div class="ctl-group"><label for="env">Commerce</label><select id="env"></select></div>
       <div class="ctl-group"><label for="seed">Monde n°</label><input id="seed" type="number" min="1" max="9999" value="1"><button class="btn" id="reset" type="button">Nouvelle année</button></div>
     </div>
   </header>
@@ -242,7 +243,9 @@ footer.how b { color: var(--ink); }
 </div>
 
 <script>
+const __m = {};
 // ---- src/rng.js ----
+__m['rng'] = (() => {
 // Générateur pseudo-aléatoire déterministe (mulberry32) + lois usuelles.
 function makeRng(seed = 1) {
   let s = (seed >>> 0) || 1;
@@ -339,7 +342,10 @@ function normalNodes(K = 48) {
   return z;
 }
 
+return { makeRng, poissonInv, normInv, normCdf, lgamma, normalNodes };
+})();
 // ---- src/linalg.js ----
+__m['linalg'] = (() => {
 // Algèbre linéaire minimale pour petites matrices denses (tableaux de lignes).
 const zeros = (n, m) => Array.from({ length: n }, () => new Array(m).fill(0));
 const eye = (n, s = 1) => { const A = zeros(n, n); for (let i = 0; i < n; i++) A[i][i] = s; return A; };
@@ -380,18 +386,40 @@ function cholInverse(L) {
 
 const cholLogDet = (L) => { let s = 0; for (let i = 0; i < L.length; i++) s += 2 * Math.log(L[i][i]); return s; };
 
+return { zeros, eye, dot, matVec, cholesky, cholSolve, cholInverse, cholLogDet };
+})();
 // ---- src/model.js ----
-// Modèle du monde : régression linéaire bayésienne conjuguée Normale–Inverse-Gamma.
-// y = log(demande) ; x = caractéristiques (prix, jour, marketing, + ruptures structurelles crues).
-// Tout est exact et fermé : postérieure, prédictive de Student, vraisemblance marginale
-// (utilisée pour comparer des hypothèses par facteur de Bayes).
+__m['model'] = (() => {
+// Modèle du monde : régression linéaire bayésienne conjuguée Normale–Inverse-Gamma, pondérée.
+// y = log(demande) ; x = caractéristiques de base (prix, jour, marketing) + TERMES découverts.
+//
+// Un terme est une composition  DÉCLENCHEUR TEMPOREL × MÉCANISME :
+//   déclencheur : 'all' (depuis toujours) | 'step' (à partir de τ, jusqu'à end) | 'ramp' (croît linéairement depuis τ)
+//   mécanisme   : const | lp (log prix) | lp2 (courbure) | lm (marketing) | dow (un jour de semaine)
+//                 | thresh (prix > θ) | season (annuelle, 2 colonnes) | pulse (tous les k jours, phase φ)
+//                 | adstock (rémanence du marketing, λ) | variance (volatilité ×ratio : pondération, pas une colonne)
+// Tout reste exact : postérieure, prédictive de Student, vraisemblance marginale (facteurs de Bayes).
+const { cholesky, cholSolve, cholInverse, cholLogDet, dot, matVec } = __m['linalg'];
 
-
+// log P(Z > a) pour Z ~ N(0,1), précis aussi dans la queue (forme d'Abramowitz–Stegun).
+function logSurv(a) {
+  const z = Math.abs(a) / Math.SQRT2, t = 1 / (1 + 0.3275911 * z);
+  const poly = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t;
+  return a >= 0 ? Math.log(0.5 * poly) - (a * a) / 2 : Math.log(1 - 0.5 * poly * Math.exp(-(a * a) / 2));
+}
+// forward-substitution : ||L⁻¹ x||²
+function quadInv(L, x) {
+  const n = L.length, y = new Array(n); let s2 = 0;
+  for (let i = 0; i < n; i++) { let v = x[i]; for (let k = 0; k < i; k++) v -= L[i][k] * y[k]; y[i] = v / L[i][i]; s2 += y[i] * y[i]; }
+  return s2;
+}
+const { lgamma } = __m['rng'];
 
 const P_REF = 4.0;
 const DOW_NAMES = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+const DOW_FULL = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+const N_BASE = 9;
 
-// Caractéristiques de base. r = {t, dow, price, marketing}
 function baseFeatures(r) {
   const x = [1, Math.log(r.price / P_REF)];
   for (let d = 1; d < 7; d++) x.push(r.dow === d ? 1 : 0);
@@ -400,71 +428,180 @@ function baseFeatures(r) {
 }
 const BASE_NAMES = ['niveau', 'élasticité', ...DOW_NAMES.slice(1).map((d) => `effet ${d}`), 'effet marketing'];
 
-function beliefFeature(b, r) {
-  const on = r.t >= b.tau && (b.end == null || r.t < b.end);
-  if (b.type === 'level') return on ? 1 : 0;
-  if (b.type === 'elasticity') return on ? Math.log(r.price / P_REF) : 0;
-  if (b.type === 'marketing') return on ? Math.log1p(r.marketing / 10) : 0;
+// Compatibilité : les anciennes croyances {type, tau, end} deviennent des termes.
+const LEGACY = { level: 'const', elasticity: 'lp', marketing: 'lm' };
+function toTerm(b) {
+  if (b.basis) return b;
+  return { ...b, family: b.type, gate: { kind: 'step', tau: b.tau, end: b.end ?? null }, basis: { kind: LEGACY[b.type] } };
+}
+
+function gateValue(g, t) {
+  if (g.kind === 'all') return 1;
+  if (t < g.tau) return 0;
+  const end = g.end ?? Infinity;
+  if (g.kind === 'step') return t < end ? 1 : 0;
+  if (g.kind === 'ramp') return (Math.min(t, end) - g.tau) / 30; // unité : mois
   return 0;
 }
 
-function features(r, beliefs) {
-  const x = baseFeatures(r);
-  for (const b of beliefs) x.push(beliefFeature(b, r));
-  return x;
+function basisValues(b, r) {
+  const lp = Math.log(r.price / P_REF);
+  switch (b.kind) {
+    case 'const': return [1];
+    case 'lp': return [lp];
+    case 'lp2': return [lp * lp];
+    case 'lm': return [Math.log1p(r.marketing / 10)];
+    case 'dow': return [r.dow === b.d ? 1 : 0];
+    case 'thresh': return [r.price > b.theta ? 1 : 0];
+    case 'season': return [Math.sin((2 * Math.PI * r.t) / 365), Math.cos((2 * Math.PI * r.t) / 365)];
+    case 'pulse': return [(((r.t - b.phase) % b.period) + b.period) % b.period === 0 ? 1 : 0];
+    case 'adstock': { const a = r.ad?.[b.lambda] ?? r.marketing; return [Math.log1p(a / 10) - Math.log1p(r.marketing / 10)]; }
+    default: return [];
+  }
+}
+const isVariance = (term) => term.basis.kind === 'variance';
+const termWidth = (term) => (isVariance(term) ? 0 : term.basis.kind === 'season' ? 2 : 1);
+
+function termValues(term, r) {
+  const g = gateValue(term.gate, r.t);
+  const v = basisValues(term.basis, r);
+  return v.map((x) => x * g);
 }
 
-// Prior : connaissances génériques d'un commerçant, volontairement faibles.
-// NB : dans le prior conjugué NIG, la covariance a priori est σ²·V0. On exprime donc des
-// écarts-types ABSOLUS (sd) et on divise par la variance de bruit a priori S0² pour obtenir V0.
+function features(r, termsIn) {
+  const x = baseFeatures(r);
+  for (const b of termsIn) { const term = toTerm(b); if (!isVariance(term)) x.push(...termValues(term, r)); }
+  return x;
+}
+// variance relative du bruit au jour t (produit des ratios des termes de volatilité actifs)
+function varianceWeight(t, terms) {
+  let w = 1;
+  for (const b of terms) { const term = toTerm(b); if (isVariance(term) && gateValue(term.gate, t) > 0) w *= term.basis.ratio; }
+  return w;
+}
+
+// Prior : écarts-types ABSOLUS divisés par la variance de bruit a priori (prior NIG : cov = σ²·V0).
 const S0 = 0.15;
-function priorFor(beliefs) {
+const TERM_SD = { const: 0.7, lp: 0.7, lp2: 0.7, lm: 0.5, dow: 0.5, thresh: 0.7, season: 0.5, pulse: 0.7, adstock: 0.7 };
+function priorFor(terms) {
   const m0 = [Math.log(100), -1, 0, 0, 0, 0, 0, 0, 0.05];
   const sd = [2, 1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
-  for (const b of beliefs) { m0.push(0); sd.push(0.7); }
+  for (const b of terms) {
+    const term = toTerm(b), k = termWidth(term);
+    const s = term.gate.kind === 'ramp' ? 0.3 : TERM_SD[term.basis.kind] ?? 0.7;
+    for (let i = 0; i < k; i++) { m0.push(0); sd.push(s); }
+  }
   const v0 = sd.map((x) => (x * x) / (S0 * S0));
   return { m0, v0, a0: 3, b0: 2 * S0 * S0 };
 }
 
-// Ajuste la postérieure sur des enregistrements (non censurés) avec un jeu de croyances.
-function fit(records, beliefsIn) {
-  const beliefs = beliefsIn.map((b) => ({ type: b.type, tau: b.tau, end: b.end }));
-  const { m0, v0, a0, b0 } = priorFor(beliefs);
-  const d = m0.length;
-  const P = Array.from({ length: d }, (_, i) => { const r = new Array(d).fill(0); r[i] = 1 / v0[i]; return r; });
-  const rhs = m0.map((m, i) => m / v0[i]);
-  let yy = 0, n = 0;
+// Lignes pondérées (x/√w, y/√w) prêtes pour les moments suffisants.
+function design(records, termsIn) {
+  const terms = termsIn.map(toTerm);
+  const rows = [];
+  let logW = 0;
   for (const r of records) {
-    // jours de rupture : demande ≥ stock → on utilise l'espérance tronquée imputée (pas d'EM)
     const y = r.censored ? r.yImp : r.y;
     if (y == null) continue;
-    const x = features(r, beliefs);
-    for (let i = 0; i < d; i++) { rhs[i] += x[i] * y; const xi = x[i]; if (xi === 0) continue; const Pi = P[i]; for (let j = 0; j < d; j++) Pi[j] += xi * x[j]; }
-    yy += y * y; n++;
+    const w = varianceWeight(r.t, terms);
+    const sw = Math.sqrt(w);
+    const x = features(r, terms).map((v) => v / sw);
+    rows.push({ x, y: y / sw, r, sw, cens: !!r.censored, yObs: r.y / sw });
+    logW += Math.log(w);
   }
+  return { terms, rows, logW };
+}
+
+function solveNIG(P, rhs, yy, n, prior, logW) {
+  const { m0, v0, a0, b0 } = prior;
   const L = cholesky(P);
   const mn = cholSolve(L, rhs);
   const m0Pm0 = m0.reduce((s, m, i) => s + (m * m) / v0[i], 0);
   const an = a0 + n / 2;
   const bn = Math.max(1e-9, b0 + 0.5 * (yy + m0Pm0 - dot(mn, rhs)));
   const logDetV0 = v0.reduce((s, v) => s + Math.log(v), 0);
-  const logDetVn = -cholLogDet(L);
-  const logML = -0.5 * n * Math.log(2 * Math.PI) + 0.5 * (logDetVn - logDetV0) + a0 * Math.log(b0) - an * Math.log(bn) + lgamma(an) - lgamma(a0);
+  const logML = -0.5 * n * Math.log(2 * Math.PI) + 0.5 * (-cholLogDet(L) - logDetV0) + a0 * Math.log(b0) - an * Math.log(bn) + lgamma(an) - lgamma(a0) - 0.5 * logW;
+  return { L, mn, an, bn, logML };
+}
+
+function moments(D, prior, onlyUncensored = false) {
+  const d = prior.m0.length;
+  const P = Array.from({ length: d }, (_, i) => { const r = new Array(d).fill(0); r[i] = 1 / prior.v0[i]; return r; });
+  const rhs = prior.m0.map((m, i) => m / prior.v0[i]);
+  let yy = 0;
+  let n = 0;
+  for (const { x, y, cens } of D.rows) {
+    if (onlyUncensored && cens) continue;
+    n++;
+    for (let i = 0; i < d; i++) { const xi = x[i]; if (xi === 0) continue; rhs[i] += xi * y; const Pi = P[i]; for (let j = 0; j < d; j++) Pi[j] += xi * x[j]; }
+    yy += y * y;
+  }
+  return { P, rhs, yy, n };
+}
+
+function fit(records, termsIn) {
+  const terms = termsIn.map((b) => { const t = toTerm(b); return { family: t.family, gate: { ...t.gate }, basis: { ...t.basis } }; });
+  const prior = priorFor(terms);
+  const D = design(records, terms);
+  const M = moments(D, prior);
+  const S = solveNIG(M.P, M.rhs, M.yy, M.n, prior, D.logW);
+  // Score de comparaison « Tobit » : vraisemblance marginale exacte des jours observés
+  // × probabilité prédictive des ruptures (demande ≥ stock) sous la postérieure des jours observés.
+  const Mu = moments(D, prior, true);
+  const logWu = D.rows.reduce((s, r) => s + (r.cens ? 0 : 2 * Math.log(r.sw)), 0);
+  const Su = solveNIG(Mu.P, Mu.rhs, Mu.yy, Mu.n, prior, logWu);
+  const score = Su.logML + censTerm(D.rows, (row) => row.x, Su);
+  return makeModel(terms, { ...S, logML: score, logMLImputed: S.logML, logMLu: Su.logML }, M, D, prior, Mu, logWu);
+}
+
+// log p(ruptures | jours observés), par filtrage à densité supposée (ADF/EP) :
+// chaque jour de rupture (demande ≥ stock) est intégré tour à tour ; la postérieure gaussienne des
+// coefficients est mise à jour par appariement de moments de la loi tronquée (σ² fixé à sa moyenne a posteriori).
+function censTerm(rows, xOf, Su, withMean = false) {
+  const cens = rows.filter((r) => r.cens);
+  if (!cens.length) return withMean ? { s: 0, m: Su.mn } : 0;
+  const sig2 = Su.bn / Su.an;
+  const S = cholInverse(Su.L).map((row) => row.map((v) => v * sig2)); // covariance des coefficients
+  const m = Su.mn.slice();
+  const d = m.length;
+  let s = 0;
+  for (const row of cens) {
+    const x = xOf(row);
+    const Sx = new Array(d);
+    for (let i = 0; i < d; i++) { let v = 0; const Si = S[i]; for (let j = 0; j < d; j++) v += Si[j] * x[j]; Sx[i] = v; }
+    const vf = Math.max(1e-12, dot(x, Sx)), mu = dot(x, m), s2 = vf + sig2, sc = Math.sqrt(s2);
+    const a = (row.yObs - mu) / sc;
+    const lz = logSurv(a);
+    s += lz;
+    const lam = Math.exp(-0.5 * a * a - 0.5 * Math.log(2 * Math.PI) - lz); // φ(a)/S(a)
+    const delta = Math.min(1, lam * (lam - a));
+    const k1 = lam / sc, k2 = delta / s2;
+    for (let i = 0; i < d; i++) m[i] += Sx[i] * k1;
+    for (let i = 0; i < d; i++) { const Si = S[i], c = Sx[i] * k2; for (let j = 0; j < d; j++) Si[j] -= c * Sx[j]; }
+  }
+  return withMean ? { s, m } : s;
+}
+
+function makeModel(terms, S, M, D, prior, Mu, logWu) {
+  const { mn, an, bn, L, logML } = S;
   let Vn = null;
   const getVn = () => (Vn ??= cholInverse(L));
-  return {
-    beliefs, mn, an, bn, n, logML, L,
+  // index de la première colonne de chaque terme (−1 pour un terme de volatilité)
+  const cols = []; let c = N_BASE;
+  for (const t of terms) { const k = termWidth(t); cols.push(k ? c : -1); c += k; }
+  const model = {
+    terms, beliefs: terms, mn, an, bn, n: M.n, logML, logMLu: S.logMLu, L, cols, _D: D, _M: M, _prior: prior,
     get Vn() { return getVn(); },
     sigma2: bn / an,
-    // Prédictive de Student : moyenne, échelle, ddl
+    refitWith(ts) { return fit(D.rows.map((x) => x.r), ts); },
     predict(r) {
-      const x = features(r, beliefs);
+      const x = features(r, terms);
       const Vx = matVec(getVn(), x);
-      const s2 = (bn / an) * (1 + dot(x, Vx));
+      const w = varianceWeight(r.t, terms);
+      const s2 = (bn / an) * (w + dot(x, Vx));
       return { mu: dot(x, mn), scale: Math.sqrt(s2), dof: 2 * an };
     },
     coefSd(i) { return Math.sqrt((bn / an) * getVn()[i][i]); },
-    // Tirage (θ, σ²) a posteriori — pour Thompson sampling et le bac à sable
     sample(rng) {
       const sigma2 = 1 / (rng.gamma(an) / bn);
       const C = cholesky(getVn().map((row) => row.map((v) => v * sigma2)));
@@ -472,17 +609,48 @@ function fit(records, beliefsIn) {
       const theta = mn.map((m, i) => { let s = m; for (let k = 0; k <= i; k++) s += C[i][k] * z[k]; return s; });
       return { theta, sigma: Math.sqrt(sigma2) };
     },
+    // Évaluation rapide d'un terme candidat (colonnes ajoutées) par moments augmentés : O(n·d) au lieu de O(n·d²).
+    scoreCandidate(cand) {
+      const term = toTerm(cand);
+      // volatilité : preuve exigée sur les seuls jours sans rupture (conservateur face à la troncature)
+      if (isVariance(term)) { const m = fit(D.rows.map((x) => x.r), [...terms, term]); return { logML: logML + (m.logMLu - S.logMLu), coef: [term.basis.ratio] }; }
+      const k = termWidth(term), d = mn.length;
+      const p2 = priorFor([...terms, term]);
+      const P = Mu.P.map((row) => row.concat(new Array(k).fill(0)));
+      for (let i = 0; i < k; i++) P.push(new Array(d + k).fill(0));
+      const rhs = Mu.rhs.concat(new Array(k).fill(0));
+      for (let i = 0; i < k; i++) P[d + i][d + i] = 1 / p2.v0[d + i];
+      const extra = new Map();
+      for (const row of D.rows) {
+        const cv = termValues(term, row.r).map((v) => v / row.sw);
+        if (row.cens) { extra.set(row, cv); continue; }
+        for (let a = 0; a < k; a++) {
+          const ca = cv[a]; if (ca === 0) continue;
+          rhs[d + a] += ca * row.y;
+          for (let j = 0; j < d; j++) { const v = ca * row.x[j]; P[d + a][j] += v; P[j][d + a] += v; }
+          for (let b = 0; b < k; b++) P[d + a][d + b] += ca * cv[b];
+        }
+      }
+      const S2 = solveNIG(P, rhs, Mu.yy, Mu.n, p2, logWu);
+      // coefficients : moyenne a posteriori APRÈS intégration des ruptures (un pic toujours en rupture reste estimable)
+      const ct = censTerm(D.rows, (row) => row.x.concat(extra.get(row)), S2, true);
+      return { logML: S2.logML + ct.s, coef: ct.m.slice(d) };
+    },
   };
+  return model;
 }
 
-const predictWith = (theta, r, beliefs) => dot(features(r, beliefs), theta);
+const predictWith = (theta, r, terms) => dot(features(r, terms), theta);
 
+return { logSurv, P_REF, DOW_NAMES, DOW_FULL, N_BASE, baseFeatures, BASE_NAMES, toTerm, gateValue, basisValues, isVariance, termWidth, termValues, features, varianceWeight, S0, priorFor, design, fit, predictWith };
+})();
 // ---- src/world.js ----
+__m['world'] = (() => {
 // Le monde caché : une boulangerie (produit périssable, invendus perdus chaque soir).
 // L'agent ne voit QUE : jour, coût unitaire du jour, ses propres actions, et ses ventes
 // (plafonnées par son stock → demande censurée). Tout le reste est caché.
-
-
+const { makeRng, poissonInv } = __m['rng'];
+const { P_REF } = __m['model'];
 
 const DOW_LOG = [0.85, 0.9, 0.95, 1.0, 1.15, 1.35, 1.1].map(Math.log);
 const PRICE_MIN = 1.5, PRICE_MAX = 6.0;
@@ -511,30 +679,51 @@ function defaultScenario(seed) {
   };
 }
 
+const sig = (x) => 1 / (1 + Math.exp(-x));
+
 function createWorld(seed = 1, scenario = defaultScenario(seed)) {
   const sc = structuredClone(scenario);
   // Nombres aléatoires communs : pré-tirés par jour, indépendants des actions.
   const nr = makeRng(seed * 104729 + 7);
   const noise = [], unif = [];
   for (let t = 0; t < 2000; t++) { noise.push(nr.normal()); unif.push(nr.next()); }
+  // pics récurrents avec aléa de date : jours pré-tirés
+  const jr = makeRng(seed * 7 + 99);
+  for (const e of sc.events) if (e.type === 'pulse' && e.jitter && !e.days) {
+    e.days = [];
+    for (let d = e.phase; d < 2000; d += e.period) e.days.push(d + jr.int(-e.jitter, e.jitter));
+  }
+  let adState = 0; // stock publicitaire réel (mécanisme d'effet retard)
 
+  const on = (e, t) => t >= (e.start ?? 0) && (e.end == null || t < e.end);
   const w = {
     seed, scenario: sc, t: 0,
     dow: (t) => t % 7,
     cost(t) { let c = sc.baseCost; for (const e of sc.events) if (e.type === 'cost' && t >= e.start) c = e.value; return c; },
-    logRate(t, price, marketing) {
-      let beta = sc.beta, lvl = sc.alpha;
+    // log du taux de demande. steady=true : marketing supposé constant (régime permanent de l'effet retard)
+    logRate(t, price, marketing, steady = false) {
+      let beta = sc.beta, lvl = sc.alpha, dow = DOW_LOG[t % 7], mEff = marketing;
+      const lp = Math.log(price / P_REF);
       for (const e of sc.events) {
-        const on = t >= e.start && (e.end == null || t < e.end);
-        if (!on) continue;
-        if (e.type === 'level') lvl += e.mag;
-        if (e.type === 'elasticity') beta += e.mag;
+        switch (e.type) {
+          case 'level': if (on(e, t)) lvl += e.mag; break;
+          case 'elasticity': if (on(e, t)) beta += e.mag; break;
+          case 'dow': if (on(e, t)) dow += e.shift[t % 7]; break;
+          case 'trend': if (t >= e.start) lvl += e.perDay * (Math.min(t, e.end ?? Infinity) - e.start); break;
+          case 'logistic': lvl += e.mag * sig((t - e.mid) / e.width); break;
+          case 'threshold': if (on(e, t)) lvl += e.soft ? e.mag * sig((price - e.theta) / e.soft) : price > e.theta ? e.mag : 0; break;
+          case 'pulse': if (on(e, t) && (e.days ? e.days.includes(t) : (t - e.phase) % e.period === 0)) lvl += e.mag; break;
+          case 'season': lvl += e.amp * Math.cos((2 * Math.PI * (t - e.peak)) / 365); break;
+          case 'adstock': if (on(e, t) && !steady) mEff = (1 - e.lambda) * marketing + e.lambda * adState; break;
+          default: break;
+        }
       }
-      return lvl + beta * Math.log(price / P_REF) + DOW_LOG[t % 7] + sc.gamma * Math.log1p(marketing / 10);
+      return lvl + beta * lp + dow + sc.gamma * Math.log1p(mEff / 10);
     },
-    trueBeta(t) { let b = sc.beta; for (const e of sc.events) if (e.type === 'elasticity' && t >= e.start) b += e.mag; return b; },
+    noiseSd(t) { let s = sc.noise; for (const e of sc.events) if (e.type === 'variance' && on(e, t)) s *= e.factor; return s; },
+    trueBeta(t) { let b = sc.beta; for (const e of sc.events) if (e.type === 'elasticity' && on(e, t)) b += e.mag; return b; },
     demand(t, price, marketing) {
-      const lam = Math.exp(w.logRate(t, price, marketing) + sc.noise * noise[t]);
+      const lam = Math.exp(w.logRate(t, price, marketing) + w.noiseSd(t) * noise[t]);
       return poissonInv(lam, unif[t]);
     },
     // Exécute une journée. action = {price, marketing, order}
@@ -547,19 +736,24 @@ function createWorld(seed = 1, scenario = defaultScenario(seed)) {
       const D = w.demand(t, price, marketing);
       const sales = Math.min(D, order);
       const profit = price * sales - cost * order - marketing - FIXED_COST;
+      const ad = sc.events.find((e) => e.type === 'adstock' && on(e, t));
+      adState = ad ? (1 - ad.lambda) * marketing + ad.lambda * adState : marketing;
       w.t++;
       return { t, dow: t % 7, price, marketing, order, cost, sales, censored: sales >= order, waste: order - sales, profit, _demand: D };
     },
     inject(e) { sc.events.push({ ...e }); },
-    activeEvents(t) { return sc.events.filter((e) => t >= e.start && (e.end == null || t < e.end)); },
+    activeEvents(t) { return sc.events.filter((e) => on(e, t)); },
   };
   return w;
 }
 
+return { DOW_LOG, PRICE_MIN, PRICE_MAX, MARKETING_LEVELS, FIXED_COST, HORIZON, defaultScenario, createWorld };
+})();
 // ---- src/econ.js ----
+__m['econ'] = (() => {
 // Économie de la décision : newsvendor sous demande log-normale, optimisation prix × marketing.
-
-
+const { normInv, normalNodes } = __m['rng'];
+const { PRICE_MIN, PRICE_MAX, MARKETING_LEVELS, FIXED_COST } = __m['world'];
 
 const NODES = normalNodes(32);
 const PRICE_GRID = (() => { const g = []; for (let p = PRICE_MIN; p <= PRICE_MAX + 1e-9; p += 0.1) g.push(Math.round(p * 100) / 100); return g; })();
@@ -595,16 +789,180 @@ function optimize(predict, cost, delta = 0, constraint = () => true) {
   return best;
 }
 
+return { NODES, PRICE_GRID, newsvendorQ, expectedProfit, optimize };
+})();
+// ---- src/discovery.js ----
+__m['discovery'] = (() => {
+// Découverte ouverte : générer des explications candidates par une GRAMMAIRE
+// (déclencheur × mécanisme), les comparer par vraisemblance marginale exacte avec un
+// prior hiérarchique (familles équiprobables, puis uniforme dans chaque famille),
+// puis les raconter en langage clair à partir de leur structure.
+const { DOW_FULL, P_REF } = __m['model'];
+
+// Familles d'explications. 'closed' = vocabulaire de CORTEX v1 ; 'open' = grammaire complète.
+const FAMILY_FR = {
+  level: 'rupture de niveau', elasticity: 'sensibilité au prix', marketing: 'efficacité marketing', end: 'fin d’un effet',
+  dow: 'habitude hebdomadaire', trend: 'dérive progressive', threshold: 'seuil de prix', curvature: 'courbure de la réponse au prix',
+  pulse: 'pic récurrent', season: 'saisonnalité annuelle', adstock: 'effet retard du marketing', variance: 'volatilité',
+};
+const GRAMMARS = {
+  closed: ['level', 'elasticity', 'marketing'],
+  open: ['level', 'elasticity', 'marketing', 'dow', 'trend', 'threshold', 'curvature', 'pulse', 'season', 'adstock', 'variance'],
+};
+const THETAS = [3, 3.5, 4, 4.5, 5];
+// A priori métier (choisi sur les graines de développement, documenté) : les ruptures de niveau sont
+// les changements les plus fréquents en commerce, puis ceux de sensibilité au prix ; le reste est équiprobable.
+const FAMILY_PRIOR = { level: 3, elasticity: 1.5, end: 2 };
+const PERIODS = [14, 30];
+const RATIOS = [0.3, 3.5]; // seules les ruptures de volatilité franches (le bruit de comptage rend la variance du log légèrement hétérogène)
+const LAMBDAS = [0.5, 0.8];
+
+const same = (a, b) => a.family === b.family && JSON.stringify(a.basis) === JSON.stringify(b.basis) && a.gate.kind === b.gate.kind && (a.gate.kind === 'all' || Math.abs(a.gate.tau - b.gate.tau) < 10);
+
+// Candidats datés (déclencheur step/ramp à τ) pour une famille.
+function dated(family, tau) {
+  const s = (basis) => ({ family, gate: { kind: 'step', tau, end: null }, basis });
+  switch (family) {
+    case 'level': return [s({ kind: 'const' })];
+    case 'elasticity': return [s({ kind: 'lp' })];
+    case 'marketing': return [s({ kind: 'lm' })];
+    case 'dow': return [0, 1, 2, 3, 4, 5, 6].map((d) => s({ kind: 'dow', d }));
+    case 'trend': return [{ family, gate: { kind: 'ramp', tau, end: null }, basis: { kind: 'const' } }];
+    case 'threshold': return THETAS.map((theta) => s({ kind: 'thresh', theta }));
+    case 'curvature': return [s({ kind: 'lp2' })];
+    case 'variance': return RATIOS.map((ratio) => s({ kind: 'variance', ratio }));
+    case 'pulse': { const out = []; for (const period of PERIODS) for (let phase = 0; phase < period; phase++) out.push(s({ kind: 'pulse', period, phase })); return out; }
+    default: return [];
+  }
+}
+// familles coûteuses : grille de dates plus grossière
+const COARSE = { pulse: 3 };
+// Candidats structurels (présents depuis toujours) : composantes manquantes du modèle.
+function structural(family) {
+  const a = (basis) => ({ family, gate: { kind: 'all' }, basis });
+  switch (family) {
+    case 'threshold': return THETAS.map((theta) => a({ kind: 'thresh', theta }));
+    case 'curvature': return [a({ kind: 'lp2' })];
+    case 'season': return [a({ kind: 'season' })];
+    case 'adstock': return LAMBDAS.map((lambda) => a({ kind: 'adstock', lambda }));
+    case 'pulse': { const out = []; for (const period of PERIODS) for (let phase = 0; phase < period; phase++) out.push(a({ kind: 'pulse', period, phase })); return out; }
+    default: return [];
+  }
+}
+
+// Génère, évalue et pèse toutes les explications. model = modèle courant (termes admis).
+function searchExplanations(model, t, { grammar = 'open', warmup = 28, lookback = 60, stepTau = 3, minDays = 60 } = {}) {
+  const fams = GRAMMARS[grammar];
+  const terms = model.terms;
+  const cands = [];
+  const lo = Math.max(warmup, t - lookback), hi = t - 3;
+  for (const f of fams) {
+    for (let tau = lo; tau <= hi; tau += stepTau * (COARSE[f] ?? 1)) for (const c of dated(f, tau)) cands.push(c);
+    // une saisonnalité annuelle n'est identifiable qu'avec assez d'historique
+    if (f !== 'season' || t >= minDays) for (const c of structural(f)) cands.push(c);
+  }
+  // fin d'un effet admis (déclencheur step sans fin)
+  terms.forEach((x, i) => {
+    if (x.gate.kind !== 'step' || x.gate.end != null || x.family === 'variance') return;
+    for (let tau = Math.max(lo, x.gate.tau + 6); tau <= hi; tau += stepTau) cands.push({ family: 'end', target: i, tau });
+  });
+  const pool = cands.filter((c) => c.family === 'end' || !terms.some((x) => same(x, c)));
+  // évaluation
+  for (const c of pool) {
+    if (c.family === 'end') {
+      const alt = terms.map((x, i) => (i === c.target ? { ...x, gate: { ...x.gate, end: c.tau } } : x));
+      c.logML = model.refitWith(alt).logML;
+    } else {
+      const s = model.scoreCandidate(c); c.logML = s.logML; c.coef = s.coef;
+    }
+  }
+  refineBest(model, pool);
+  // prior hiérarchique : P(rien) = 1/2 ; chaque famille présente reçoit (1/2)/F, partagée entre ses candidats
+  const byFam = {};
+  for (const c of pool) (byFam[c.family] ??= []).push(c);
+  const wsum = Object.keys(byFam).reduce((s, f) => s + (FAMILY_PRIOR[f] ?? 1), 0);
+  const scores = [model.logML + Math.log(0.5)];
+  for (const c of pool) { c.logPrior = Math.log((0.5 * (FAMILY_PRIOR[c.family] ?? 1)) / wsum / byFam[c.family].length); scores.push(c.logML + c.logPrior); }
+  const mx = Math.max(...scores);
+  const Z = scores.reduce((s, x) => s + Math.exp(x - mx), 0);
+  const pNull = Math.exp(scores[0] - mx) / Z;
+  const famMass = {};
+  pool.forEach((c, i) => { c.post = Math.exp(scores[i + 1] - mx) / Z; c.logBF = c.logML - model.logML; famMass[c.family] = (famMass[c.family] || 0) + c.post; });
+  pool.sort((a, b) => b.post - a.post);
+  return { pNull, famMass, top: pool.slice(0, 8), all: pool, nCandidates: pool.length };
+}
+
+// Affinage de la date au jour près autour des meilleurs candidats datés de chaque famille.
+function refineBest(model, pool) {
+  const bestByFam = {};
+  for (const c of pool) if (c.gate && c.gate.kind !== 'all' && (!bestByFam[c.family] || c.logML > bestByFam[c.family].logML)) bestByFam[c.family] = c;
+  for (const c of Object.values(bestByFam)) {
+    for (const d of [-2, -1, 1, 2]) {
+      const v = { ...c, gate: { ...c.gate, tau: c.gate.tau + d }, refined: true };
+      const s = model.scoreCandidate(v);
+      v.logML = s.logML; v.coef = s.coef;
+      pool.push(v);
+    }
+  }
+}
+
+// Narration : la structure du terme + ses coefficients → une explication lisible.
+const pct = (x) => `${x >= 0 ? '+' : ''}${Math.round(x * 100)} %`;
+function narrate(term, coef) {
+  const c = coef?.[0] ?? 0, g = term.gate;
+  const since = g.kind === 'all' ? 'Depuis toujours' : `Depuis le jour ${g.tau}`;
+  const until = g.end != null ? ` jusqu’au jour ${g.end}` : '';
+  const b = term.basis;
+  switch (b.kind) {
+    case 'const': {
+      const e = Math.exp(c) - 1;
+      if (g.kind === 'ramp') return `${since}${until}, la clientèle dérive progressivement de ${pct(Math.exp(c) - 1)} par mois (${e < 0 ? 'érosion lente : quartier qui change, concurrence qui s’installe' : 'croissance lente : bouche-à-oreille'}).`;
+      return `${since}${until}, la demande a ${e < 0 ? 'chuté' : 'bondi'} de ${pct(e)} (${e < 0 ? 'concurrent ou perte de clientèle' : g.end != null ? 'événement temporaire, mode passagère' : 'nouvelle clientèle ou effet de mode'}).`;
+    }
+    case 'lp': return `${since}, les clients ${c < 0 ? 'réagissent plus fortement' : 'réagissent moins'} au prix (élasticité ${c < 0 ? 'renforcée' : 'atténuée'} de ${Math.abs(c).toFixed(2)}).`;
+    case 'lm': return `${since}, le marketing est ${c > 0 ? 'plus' : 'moins'} efficace (${c > 0 ? '+' : ''}${c.toFixed(2)}).`;
+    case 'dow': return `${since}, le ${DOW_FULL[b.d]} a changé : ${pct(Math.exp(c) - 1)} de clients ce jour-là (habitude déplacée : marché, horaires, voisinage).`;
+    case 'thresh': return `${since}, au-delà de ${b.theta.toFixed(2)} € les clients décrochent : ${pct(Math.exp(c) - 1)} de demande (seuil psychologique de prix).`;
+    case 'lp2': return `${since}, la réponse au prix n’est pas proportionnelle : ${c < 0 ? 'les écarts au prix habituel sont punis plus fort qu’attendu' : 'les clients s’habituent aux extrêmes'} (courbure ${c.toFixed(2)}).`;
+    case 'season': {
+      const [a, bb] = coef ?? [0, 0];
+      const amp = Math.sqrt(a * a + bb * bb);
+      const peak = ((Math.round((Math.atan2(a, bb) * 365) / (2 * Math.PI)) % 365) + 365) % 365;
+      return `Il existe un cycle annuel : ±${Math.round((Math.exp(amp) - 1) * 100)} % de clients, pic vers le jour ${peak}, creux vers le jour ${(peak + 182) % 365}.`;
+    }
+    case 'pulse': return `${since}, un pic revient tous les ${b.period} jours (${pct(Math.exp(c) - 1)}, ex. jour ${b.phase}) : événement récurrent (paie, marché, livraison).`;
+    case 'adstock': return `Le marketing agit avec retard : son effet persiste plusieurs jours (demi-vie ≈ ${(Math.log(0.5) / Math.log(b.lambda)).toFixed(1)} j), il ne faut pas le juger sur le jour même.`;
+    case 'variance': return `${since}, la demande est ${b.ratio > 1 ? `${Math.sqrt(b.ratio).toFixed(1)} fois plus volatile` : `${(1 / Math.sqrt(b.ratio)).toFixed(1)} fois plus stable`} : ${b.ratio > 1 ? 'prudence sur les stocks' : 'je peux serrer les stocks'}.`;
+    default: return '';
+  }
+}
+
+// Alternatives de requalification : même date, autres mécanismes ; ou composante structurelle.
+function alternatives(term, grammar) {
+  const out = [];
+  if (term.gate.kind !== 'all') {
+    for (const f of GRAMMARS[grammar]) for (const c of dated(f, term.gate.tau)) if (JSON.stringify(c.basis) !== JSON.stringify(term.basis) || c.gate.kind !== term.gate.kind) out.push({ ...c, gate: { ...c.gate, end: term.gate.end ?? null } });
+  }
+  for (const f of GRAMMARS[grammar]) if (f !== 'pulse') for (const c of structural(f)) if (JSON.stringify(c.basis) !== JSON.stringify(term.basis)) out.push(c);
+  return out;
+}
+
+
+
+return { FAMILY_FR, GRAMMARS, FAMILY_PRIOR, searchExplanations, narrate, alternatives, P_REF };
+})();
 // ---- src/agent.js ----
+__m['agent'] = (() => {
 // CORTEX — la boucle cognitive.
 // Matin  : OBSERVER → COMPRENDRE → CONFRONTER → (HYPOTHÈSES) → ANTICIPER → PRIORISER → DÉCIDER → SIMULER → EXÉCUTER | REVUE HUMAINE
 // Soir   : MESURER → APPRENDRE → RÉVISER → (DREAMING, chaque dimanche soir) → retour
 // Aucune magie : chaque étape est un calcul explicite et traçable.
-
-
-
-
-
+const { makeRng, normCdf } = __m['rng'];
+const { fit, features, DOW_NAMES, P_REF, varianceWeight, termWidth, gateValue, termValues } = __m['model'];
+const { searchExplanations, narrate: narrateTerm, alternatives, FAMILY_FR } = __m['discovery'];
+const { optimize, newsvendorQ, expectedProfit } = __m['econ'];
+const { MARKETING_LEVELS, FIXED_COST, HORIZON } = __m['world'];
+const { dot, matVec } = __m['linalg'];
 
 const STAGES = [
   ['observer', 'Observer'], ['comprendre', 'Comprendre'], ['confronter', 'Confronter'], ['hypotheses', 'Hypothèses'],
@@ -614,7 +972,11 @@ const STAGES = [
 ];
 
 const WARMUP = 28;
-const TYPE_FR = { level: 'niveau', elasticity: 'élasticité', marketing: 'marketing', end: 'fin d’effet' };
+const TYPE_FR = FAMILY_FR;
+const VCUSUM_K = 0.75, VCUSUM_H = 12;
+// seuils de preuve (étalonnés sur les graines de développement uniquement)
+const P_CONTRA_OPEN = 0.99, P_BACKGROUND = 0.999;
+const PROBE_FAMILIES = ['pulse', 'dow'];
 const CUSUM_K = 0.5, CUSUM_H = 5;
 const ECUSUM_K = 0.25, ECUSUM_H = 5;
 const DITHER = 0.08;
@@ -624,12 +986,14 @@ const eur = (x) => `${x >= 0 ? '' : '−'}${Math.abs(x).toFixed(0)} €`;
 const f2 = (x) => x.toFixed(2);
 
 function createAgent(opts = {}) {
-  const o = { hypotheses: true, dreaming: true, learning: true, vigilance: true, window: null, seed: 1, name: 'CORTEX', ...opts };
+  // grammar : 'closed' (vocabulaire v1 : niveau/élasticité/marketing) | 'open' (grammaire déclencheur × mécanisme)
+  // omnibus : détecteur générique de surprise (erreur²) ; background : recherche de structure chaque nuit de rêve
+  const o = { hypotheses: true, dreaming: true, learning: true, vigilance: true, window: null, seed: 1, name: 'CORTEX', grammar: 'open', omnibus: true, background: true, ...opts };
   const rng = makeRng(o.seed * 31337 + 1);
   const A = {
     opts: o,
     records: [], beliefs: [], retracted: [], hypothesisLog: [],
-    model: null, kappa: 1, cusum: { pos: 0, neg: 0 }, ecusum: { pos: 0, neg: 0 }, lastZ: null,
+    model: null, kappa: 1, cusum: { pos: 0, neg: 0 }, ecusum: { pos: 0, neg: 0 }, vcusum: 0, lastZ: null, adPrev: { 0.5: 0, 0.8: 0 },
     skills: { order: { name: 'Commande newsvendor', version: 1, delta: 0, notes: [] } },
     rules: { maxStep: 0.15, pLossMax: 0.3, marketingCap: 100, approvals: 0, rejections: 0, lastRejection: null, list: [] },
     memory: [], journal: [], stageCount: Object.fromEntries(STAGES.map(([k]) => [k, 0])),
@@ -656,18 +1020,20 @@ function createAgent(opts = {}) {
   };
   refit();
 
-  const dayRec = (t, price, marketing) => ({ t, dow: t % 7, price, marketing });
+  // l'agent connaît ses propres dépenses marketing passées → stock publicitaire (adstock) pour λ candidats
+  const adFor = (m) => ({ 0.5: 0.5 * m + 0.5 * A.adPrev[0.5], 0.8: 0.2 * m + 0.8 * A.adPrev[0.8] });
+  const dayRec = (t, price, marketing) => ({ t, dow: t % 7, price, marketing, ad: adFor(marketing) });
   const predictor = (model, t) => (price, marketing) => {
     const p = model.predict(dayRec(t, price, marketing));
     return { mu: p.mu, s: p.scale * A.kappa };
   };
-  const thetaPredictor = (theta, sigma, t) => (price, marketing) => ({ mu: dot(features(dayRec(t, price, marketing), A.beliefs), theta), s: sigma });
+  const thetaPredictor = (theta, sigma, t) => (price, marketing) => ({ mu: dot(features(dayRec(t, price, marketing), A.beliefs), theta), s: sigma * Math.sqrt(varianceWeight(t, A.beliefs)) });
 
   // élasticité effective aujourd'hui (coef de base + croyances actives) et son écart-type
   function elasticityNow(t) {
     const m = A.model, d = m.mn.length;
     const g = new Array(d).fill(0); g[1] = 1;
-    A.beliefs.forEach((b, i) => { if (b.type === 'elasticity' && t >= b.tau) g[9 + i] = 1; });
+    A.beliefs.forEach((b, i) => { if (b.basis?.kind === 'lp' && m.cols[i] >= 0) g[m.cols[i]] = gateValue(b.gate, t); });
     const est = dot(g, m.mn);
     const sd = Math.sqrt(m.sigma2 * dot(g, matVec(m.Vn, g)));
     return { est, sd };
@@ -686,50 +1052,49 @@ function createAgent(opts = {}) {
   };
   const triedMarketing = () => new Set(A.records.map((r) => r.marketing));
 
-  // ---------- HYPOTHÈSES : sélection de modèles bayésienne exacte ----------
-  function generateAndTest(t) {
-    const data = trainingSet();
-    const base = A.model.logML;
-    const cands = [];
-    const lo = Math.max(WARMUP, t - 45), hi = t - 2;
-    for (let tau = lo; tau <= hi; tau++) {
-      for (const type of ['level', 'elasticity', 'marketing']) {
-        const b = { type, tau, end: null };
-        if (A.beliefs.some((x) => x.type === type && Math.abs(x.tau - tau) < 7 && x.end == null)) continue;
-        const m = fit(data, [...A.beliefs, b]);
-        cands.push({ ...b, logML: m.logML, coef: m.mn[m.mn.length - 1], sd: m.coefSd(m.mn.length - 1) });
+  // ---------- HYPOTHÈSES : grammaire d'explications + sélection bayésienne exacte ----------
+  const syncCoefs = () => {
+    A.beliefs.forEach((b, i) => {
+      const c = A.model.cols[i];
+      b.coef = c >= 0 ? A.model.mn.slice(c, c + termWidth(b)) : [b.basis.ratio];
+      b.type = b.family; b.tau = b.gate.kind === 'all' ? null : b.gate.tau; b.end = b.gate.end ?? null;
+      b.narrative = narrateTerm(b, b.coef);
+    });
+  };
+  // Admet (ou non) la meilleure explication. threshold = P(changement) requise.
+  function adjudicate(t, H, threshold, origin) {
+    const pChange = 1 - H.pNull;
+    const fams = Object.entries(H.famMass).sort((a, b) => b[1] - a[1]);
+    let accepted = null, ambiguous = false;
+    if (pChange > threshold && fams.length) {
+      const [bestFam, mass] = fams[0];
+      ambiguous = mass / pChange < 0.6 && bestFam !== 'end';
+      if (origin === 'background' && ambiguous) return { pChange, fams, accepted: null, ambiguous };
+      const c = H.all.find((x) => x.family === bestFam);
+      if (c.family === 'end') {
+        const b = A.beliefs[c.target];
+        b.gate.end = c.tau;
+        accepted = b; accepted.kind = 'end';
+      } else {
+        const b = { id: A.nextBeliefId++, family: c.family, gate: { ...c.gate }, basis: { ...c.basis }, acceptedAt: t, logBF: c.logBF, post: c.post, provisional: ambiguous, origin,
+          rivals: fams.slice(1, 3).map(([k, v]) => ({ family: k, p: v })) };
+        A.beliefs.push(b); accepted = b;
+        if (ambiguous) A.experimentUntil = t + 10;
       }
-      // fin d'un effet temporaire déjà cru
-      A.beliefs.forEach((x, i) => {
-        if (x.type !== 'level' || x.end != null || tau <= x.tau + 5) return;
-        const bs = A.beliefs.map((y, j) => (j === i ? { ...y, end: tau } : y));
-        const m = fit(data, bs);
-        cands.push({ type: 'end', tau, target: x.id, logML: m.logML, coef: m.mn[9 + i] });
-      });
+      refit(); syncCoefs();
     }
-    // prior : 50 % "rien n'a changé" ; 50 % réparti uniformément sur les ruptures candidates
-    const logPriorNull = Math.log(0.5), logPriorEach = Math.log(0.5 / Math.max(1, cands.length));
-    const scores = [base + logPriorNull, ...cands.map((c) => c.logML + logPriorEach)];
-    const mx = Math.max(...scores);
-    const Z = scores.reduce((s, x) => s + Math.exp(x - mx), 0);
-    const pNull = Math.exp(scores[0] - mx) / Z;
-    cands.forEach((c, i) => { c.post = Math.exp(scores[i + 1] - mx) / Z; c.logBF = c.logML - base; });
-    const byType = {};
-    for (const c of cands) byType[c.type] = (byType[c.type] || 0) + c.post;
-    cands.sort((a, b) => b.post - a.post);
-    return { pNull, byType, top: cands.slice(0, 6), best: cands[0] };
-  }
-
-  function narrate(b) {
-    if (b.type === 'level') {
-      const e = Math.exp(b.coef) - 1;
-      return e < 0
-        ? `La demande a chuté de ${pct(e)} à partir du jour ${b.tau}. Explication la plus probable : un concurrent ou une perte de clientèle.`
-        : `La demande a bondi de ${pct(e)} à partir du jour ${b.tau}. Explication la plus probable : un effet de mode ou un événement local.`;
+    // hypothèse plausible mais non prouvée → expérience de dé-censure (voir la vraie demande les jours concernés)
+    // (seulement pour les hypothèses « calendaires » qui annoncent quelques jours précis : coût borné)
+    const sparse = fams.find(([f, v]) => PROBE_FAMILIES.includes(f) && v > 0.2);
+    if (!accepted && o.grammar === 'open' && pChange > 0.5 && sparse && !(A.probe && A.probe.term.family === sparse[0])) {
+      const c = H.all.find((x) => x.family === sparse[0]);
+      if (c && c.coef?.length && c.coef[0] > 0.05) A.probe = { term: { family: c.family, gate: { ...c.gate }, basis: { ...c.basis } }, coef: c.coef, until: t + 42, budget: 6, p: sparse[1], since: t };
     }
-    if (b.type === 'elasticity') return `Depuis le jour ${b.tau}, les clients ${b.coef < 0 ? 'réagissent plus fortement' : 'réagissent moins'} au prix (élasticité ${b.coef < 0 ? 'renforcée' : 'atténuée'} de ${f2(Math.abs(b.coef))}).`;
-    if (b.type === 'marketing') return `L'efficacité du marketing a changé au jour ${b.tau} (${b.coef > 0 ? 'plus' : 'moins'} efficace).`;
-    return '';
+    if (accepted && A.probe && A.probe.term.family === accepted.family) A.probe = null;
+    A.hypothesisLog.push({ t, origin, pChange, byType: H.famMass, nCandidates: H.nCandidates,
+      top: H.top.map((c) => ({ type: c.family, family: c.family, tau: c.gate?.tau ?? c.tau ?? null, post: c.post, logBF: c.logBF, coef: c.coef?.[0], basis: c.basis })),
+      accepted: accepted ? { type: accepted.family, family: accepted.family, tau: accepted.gate.kind === 'all' ? null : accepted.gate.tau, kind: accepted.kind } : null });
+    return { pChange, fams, accepted, ambiguous };
   }
 
   // ---------- MATIN ----------
@@ -758,54 +1123,38 @@ function createAgent(opts = {}) {
       const { pos, neg } = A.cusum;
       const ep = A.ecusum.pos, en = A.ecusum.neg;
       const levelAlarm = pos > CUSUM_H || neg > CUSUM_H, priceAlarm = ep > ECUSUM_H || en > ECUSUM_H;
-      contradiction = levelAlarm || priceAlarm;
+      const surpriseAlarm = o.omnibus && A.vcusum > VCUSUM_H;
+      contradiction = levelAlarm || priceAlarm || surpriseAlarm;
       const v = contradiction ? 'contradiction' : 'confirmation';
       emit('confronter', contradiction
-        ? `Contradiction : ${levelAlarm ? `les ventes s'écartent durablement de ma théorie (CUSUM ${pos > neg ? '↑' : '↓'} ${Math.max(pos, neg).toFixed(1)} > ${CUSUM_H})` : ''}${levelAlarm && priceAlarm ? ' et ' : ''}${priceAlarm ? `mes erreurs sont corrélées au prix (score ${Math.max(ep, en).toFixed(1)} > ${ECUSUM_H}) : la réaction des clients au prix a peut-être changé` : ''}. Dernier écart z=${f2(A.lastZ)}.`
+        ? `Contradiction : ${levelAlarm ? `les ventes s'écartent durablement de ma théorie (CUSUM ${pos > neg ? '↑' : '↓'} ${Math.max(pos, neg).toFixed(1)} > ${CUSUM_H})` : ''}${levelAlarm && priceAlarm ? ' et ' : ''}${priceAlarm ? `mes erreurs sont corrélées au prix (score ${Math.max(ep, en).toFixed(1)} > ${ECUSUM_H}) : la réaction des clients au prix a peut-être changé` : ''}${surpriseAlarm ? `${levelAlarm || priceAlarm ? ' ; ' : ''}mes erreurs sont anormalement grandes (surprise cumulée ${A.vcusum.toFixed(1)} > ${VCUSUM_H}) : un mécanisme inconnu est à l'œuvre` : ''}. Dernier écart z=${f2(A.lastZ)}.`
         : `Confirmation : l'écart d'hier (z=${f2(A.lastZ)}) est compatible avec mon modèle (CUSUM ${pos.toFixed(1)}/${neg.toFixed(1)}, corrélation-prix ${ep.toFixed(1)}/${en.toFixed(1)}).`,
         { verdict: v, z: A.lastZ, cusumPos: pos, cusumNeg: neg, ecusumPos: ep, ecusumNeg: en, priceAlarm });
     }
 
     // HYPOTHÈSES
     if (contradiction && o.hypotheses) {
-      const H = generateAndTest(t);
-      const pChange = 1 - H.pNull;
-      const lines = H.top.slice(0, 3).map((c) => `${c.type === 'level' ? 'rupture de niveau' : c.type === 'elasticity' ? 'changement d’élasticité' : c.type === 'end' ? 'fin d’un effet temporaire' : 'changement d’effet marketing'} au jour ${c.tau} (p=${(c.post * 100).toFixed(1)} %)`);
-      let accepted = null, ambiguous = false;
-      const types = Object.entries(H.byType).sort((a, b) => b[1] - a[1]);
-      if (pChange > 0.95 && types.length) {
-        const [bestType, mass] = types[0];
-        ambiguous = mass / pChange < 0.6 && bestType !== 'end';
-        const c = H.top.find((x) => x.type === bestType) || H.best;
-        if (c.type === 'end') {
-          const b = A.beliefs.find((x) => x.id === c.target);
-          b.end = c.tau; b.narrative = `${narrate(b)} Cet effet a pris fin au jour ${c.tau} : retour à la normale.`;
-          accepted = { ...b, kind: 'end' };
-        } else {
-          const b = { id: A.nextBeliefId++, type: c.type, tau: c.tau, end: null, coef: c.coef, acceptedAt: t, logBF: c.logBF, post: c.post, provisional: ambiguous, rivals: types.slice(1, 3).map(([k, v]) => ({ type: k, p: v })) };
-          b.narrative = narrate(b);
-          A.beliefs.push(b); accepted = b;
-          if (ambiguous) A.experimentUntil = t + 10;
-        }
-        refit();
-        A.cusum = { pos: 0, neg: 0 }; A.ecusum = { pos: 0, neg: 0 };
-      } else if (pChange > 0.7) {
+      const H = searchExplanations(A.model, t, { grammar: o.grammar, warmup: WARMUP });
+      const { pChange, fams, accepted, ambiguous } = adjudicate(t, H, o.grammar === 'open' ? P_CONTRA_OPEN : 0.95, 'contradiction');
+      const famTxt = fams.slice(0, 4).map(([k, v]) => `${TYPE_FR[k]} ${(v * 100).toFixed(0)} %`).join(', ');
+      if (accepted) { A.cusum = { pos: 0, neg: 0 }; A.ecusum = { pos: 0, neg: 0 }; A.vcusum = 0; }
+      else if (pChange > 0.7) {
         A.experimentUntil = Math.max(A.experimentUntil ?? -1, t + 7);
         A.cusum = { pos: Math.min(A.cusum.pos, CUSUM_H * 0.8), neg: Math.min(A.cusum.neg, CUSUM_H * 0.8) };
         A.ecusum = { pos: Math.min(A.ecusum.pos, ECUSUM_H * 0.8), neg: Math.min(A.ecusum.neg, ECUSUM_H * 0.8) };
+        A.vcusum = Math.min(A.vcusum, VCUSUM_H * 0.8);
       } else {
         A.cusum = { pos: Math.min(A.cusum.pos, CUSUM_H * 0.6), neg: Math.min(A.cusum.neg, CUSUM_H * 0.6) };
         A.ecusum = { pos: Math.min(A.ecusum.pos, ECUSUM_H * 0.6), neg: Math.min(A.ecusum.neg, ECUSUM_H * 0.6) };
+        A.vcusum = Math.min(A.vcusum, VCUSUM_H * 0.6);
       }
-      A.hypothesisLog.push({ t, pChange, byType: H.byType, top: H.top.map(({ type, tau, post, logBF, coef }) => ({ type, tau, post, logBF, coef })), accepted: accepted ? { type: accepted.type, tau: accepted.tau, kind: accepted.kind } : null });
-      const typeTxt = types.map(([k, v]) => `${TYPE_FR[k]} ${(v * 100).toFixed(0)} %`).join(', ');
       emit('hypotheses', accepted
-        ? `Pourquoi ? ${accepted.narrative} (P(changement) = ${(pChange * 100).toFixed(1)} % ; ${typeTxt}).${ambiguous ? ' Explications concurrentes encore indiscernables → croyance PROVISOIRE et expérience discriminante de 10 jours (variation de prix contrôlée).' : ' Théorie du monde mise à jour.'}`
-        : `Pourquoi ? Hypothèses testées : ${lines.join(' ; ')}. P(vrai changement) ${(pChange * 100).toFixed(0)} % (< 95 %)${pChange > 0.7 ? ' → je lance une expérience de 7 jours pour trancher.' : ' : j’attends plus de données.'}`,
-        { pChange, top: H.top, byType: H.byType, accepted, ambiguous });
+        ? `Pourquoi ? ${accepted.narrative} (${H.nCandidates} explications testées ; P(changement) = ${(pChange * 100).toFixed(1)} % ; ${famTxt}).${ambiguous ? ' Explications concurrentes encore indiscernables → croyance PROVISOIRE et expérience discriminante de 10 jours.' : ' Théorie du monde mise à jour.'}`
+        : `Pourquoi ? ${H.nCandidates} explications testées (${famTxt}). P(vrai changement) ${(pChange * 100).toFixed(0)} % (< 95 %)${pChange > 0.7 ? ' → je lance une expérience de 7 jours pour trancher.' : ' : j’attends plus de données.'}`,
+        { pChange, top: H.top, byType: H.famMass, accepted, ambiguous, nCandidates: H.nCandidates });
     } else if (contradiction) {
       emit('hypotheses', `Contradiction détectée mais génération d'hypothèses désactivée (mode ablation) : je continue avec ma théorie.`, { disabled: true });
-      A.cusum = { pos: 0, neg: 0 }; A.ecusum = { pos: 0, neg: 0 };
+      A.cusum = { pos: 0, neg: 0 }; A.ecusum = { pos: 0, neg: 0 }; A.vcusum = 0;
     }
 
     // ANTICIPER : prévision 7 jours sous la politique actuelle + opportunités
@@ -865,7 +1214,20 @@ function createAgent(opts = {}) {
     const routine = optimize(decisionPred, ctx.cost, A.skills.order.delta, within);
     const bold = optimize(decisionPred, ctx.cost, A.skills.order.delta, (p, m) => m <= R.marketingCap);
     // la quantité est toujours recalculée avec la prédictive complète (prudence)
-    const finalize = (a) => { const pp = pred(a.price, a.marketing); const q = newsvendorQ(pp.mu, pp.s, a.price, ctx.cost, A.skills.order.delta); return { price: a.price, marketing: a.marketing, order: q, expProfit: expectedProfit(pp.mu, pp.s, a.price, a.marketing, ctx.cost, q).profit }; };
+    if (A.probe && (t > A.probe.until || A.probe.budget <= 0)) A.probe = null;
+    let probeNote = '';
+    const probeBoost = (a) => {
+      if (!A.probe) return 0;
+      const v = termValues(A.probe.term, dayRec(t, a.price, a.marketing));
+      const add = v.reduce((s, x, i) => s + x * (A.probe.coef[i] ?? 0), 0);
+      return add > 0.05 ? add : 0; // on ne teste que les hausses prédites (là où la rupture masque la demande)
+    };
+    const finalize = (a) => {
+      const pp = pred(a.price, a.marketing);
+      const boost = probeBoost(a);
+      const q = newsvendorQ(pp.mu + boost, pp.s, a.price, ctx.cost, A.skills.order.delta);
+      return { price: a.price, marketing: a.marketing, order: q, boost, expProfit: expectedProfit(pp.mu, pp.s, a.price, a.marketing, ctx.cost, q).profit };
+    };
     let rA = finalize(routine);
     const bA = finalize(bold);
     if (mode === 'experiment') {
@@ -884,7 +1246,9 @@ function createAgent(opts = {}) {
       const cand = finalize({ price: Math.min(6, Math.max(1.5, target)), marketing: proposal.marketing });
       if (proposal.expProfit - cand.expProfit < 6) { proposal = cand; dithered = true; }
     }
-    emit('decider', `Agent CEO : ${strategic ? 'DÉCISION STRATÉGIQUE — ' : ''}prix ${f2(proposal.price)} €${last ? ` (${pct(proposal.price / last.price - 1)})` : ''}, marketing ${proposal.marketing} €, commande ${proposal.order} unités. Profit espéré ${eur(proposal.expProfit)}.${dithered ? ` Variation de vigilance ±${DITHER * 100} % (pour garder la sensibilité-prix observable).` : ''}${strategic ? ` Dépasse la règle de pas maximal (±${(R.maxStep * 100).toFixed(0)} %) car +${eur(bA.expProfit - rA.expProfit)}/jour espérés.` : ''}`,
+    if (proposal.boost) A.probe.budget--;
+    if (proposal.boost) probeNote = ` EXPÉRIENCE : je commande davantage aujourd’hui pour tester l’hypothèse « ${TYPE_FR[A.probe.term.family]} » (p ≈ ${(A.probe.p * 100).toFixed(0)} %) — si elle est vraie, je verrai la demande au lieu d’une rupture.`;
+    emit('decider', `Agent CEO : ${strategic ? 'DÉCISION STRATÉGIQUE — ' : ''}prix ${f2(proposal.price)} €${last ? ` (${pct(proposal.price / last.price - 1)})` : ''}, marketing ${proposal.marketing} €, commande ${proposal.order} unités. Profit espéré ${eur(proposal.expProfit)}.${dithered ? ` Variation de vigilance ±${DITHER * 100} % (pour garder la sensibilité-prix observable).` : ''}${probeNote}${strategic ? ` Dépasse la règle de pas maximal (±${(R.maxStep * 100).toFixed(0)} %) car +${eur(bA.expProfit - rA.expProfit)}/jour espérés.` : ''}`,
       { proposal, strategic, mode });
 
     // SIMULER : bac à sable Monte-Carlo sur la postérieure + Agent Risque
@@ -919,7 +1283,7 @@ function createAgent(opts = {}) {
     const x = features(r, A.beliefs);
     for (let i = 0; i < S; i++) {
       const smp = A.model.sample(rng);
-      const D = Math.exp(dot(x, smp.theta) + smp.sigma * A.kappa * rng.normal());
+      const D = Math.exp(dot(x, smp.theta) + smp.sigma * Math.sqrt(varianceWeight(t, A.beliefs)) * A.kappa * rng.normal());
       const sales = Math.min(Math.round(D), a.order);
       profits[i] = a.price * sales - cost * a.order - a.marketing - FIXED_COST;
     }
@@ -987,7 +1351,8 @@ function createAgent(opts = {}) {
     trace.length = 0;
     const t = obs.t;
     const y = Math.log(Math.max(obs.sales, 0.5));
-    const rec = { t, dow: obs.dow, price: obs.price, marketing: obs.marketing, order: obs.order, cost: obs.cost, sales: obs.sales, censored: obs.censored, profit: obs.profit, y };
+    const rec = { t, dow: obs.dow, price: obs.price, marketing: obs.marketing, order: obs.order, cost: obs.cost, sales: obs.sales, censored: obs.censored, profit: obs.profit, y, ad: adFor(obs.marketing) };
+    A.adPrev = { ...rec.ad };
     const pr = A.today?.pred;
     // rupture : la demande réelle est ≥ stock → imputation par l'espérance de la loi tronquée.
     if (obs.censored) impute(rec, A.model);
@@ -1020,6 +1385,8 @@ function createAgent(opts = {}) {
       A.cusum.pos = Math.max(0, A.cusum.pos + zc - CUSUM_K);
       A.cusum.neg = obs.censored ? A.cusum.neg : Math.max(0, A.cusum.neg - zc - CUSUM_K);
       A.lastZ = z;
+      // troisième détecteur (générique) : surprise quadratique, sensible à tout mécanisme manquant
+      if (!obs.censored) A.vcusum = Math.max(0, A.vcusum + Math.min(16, zc * zc) - 1 - VCUSUM_K);
       // second détecteur : l'erreur est-elle corrélée au prix ? (statistique de score d'un changement d'élasticité)
       const win = A.records.slice(-28).map((r) => Math.log(r.price));
       if (win.length >= 14 && !obs.censored) {
@@ -1068,40 +1435,47 @@ function createAgent(opts = {}) {
   function dream(t, coverage) {
     const notes = [];
     const data = trainingSet();
-    // 1. Audit des croyances : chaque rupture est-elle encore justifiée ? Date affinée ?
+    // 1. Audit des croyances : justifiées ? date affinée ? autre mécanisme plus convaincant ? sinon rétractation.
+    //    Chaque variante est évaluée contre le modèle PRIVÉ de la croyance auditée (rapide, exact).
     if (o.hypotheses) {
       for (const b of [...A.beliefs]) {
+        if (!A.beliefs.includes(b)) continue;
         const others = A.beliefs.filter((x) => x !== b);
-        const without = fit(data, others).logML;
-        let bestTau = b.tau, bestML = fit(data, A.beliefs).logML;
-        for (let tau = Math.max(WARMUP, b.tau - 10); tau <= Math.min(t - 2, b.tau + 10); tau++) {
-          if (tau === b.tau || (b.end != null && tau >= b.end - 2)) continue;
-          const m = fit(data, A.beliefs.map((x) => (x === b ? { ...x, tau } : x))).logML;
-          if (m > bestML + 1) { bestML = m; bestTau = tau; }
-        }
-        if (bestTau !== b.tau) { notes.push(`date de la rupture #${b.id} affinée : jour ${b.tau} → ${bestTau}`); b.tau = bestTau; }
-        // requalification : une autre nature de changement explique-t-elle mieux les faits ?
-        if (b.type !== 'end' && t - b.acceptedAt >= 5) {
-          for (const alt of ['level', 'elasticity', 'marketing']) {
-            if (alt === b.type) continue;
-            const m = fit(data, A.beliefs.map((x) => (x === b ? { ...x, type: alt } : x))).logML;
-            if (m > bestML + 2) {
-              notes.push(`croyance #${b.id} REQUALIFIÉE : ${TYPE_FR[b.type]} → ${TYPE_FR[alt]} (log BF ${f2(m - bestML)})`);
-              b.type = alt; bestML = m; b.provisional = false;
-            }
+        const mw = fit(data, others);
+        const withB = mw.scoreCandidate(b).logML;
+        let best = { term: b, ml: withB };
+        const consider = (v, why) => { const ml = mw.scoreCandidate(v).logML; if (ml > best.ml + (why === 'tau' ? 1 : 2)) best = { term: v, ml, why }; };
+        if (b.gate.kind !== 'all') {
+          for (let tau = Math.max(WARMUP, b.gate.tau - 10); tau <= Math.min(t - 2, b.gate.tau + 10); tau++) {
+            if (tau === b.gate.tau || (b.gate.end != null && tau >= b.gate.end - 2)) continue;
+            consider({ ...b, gate: { ...b.gate, tau } }, 'tau');
           }
-          if (b.provisional && t - b.acceptedAt >= 14) { b.provisional = false; notes.push(`croyance #${b.id} confirmée après expérience (${TYPE_FR[b.type]})`); }
         }
-        const logBF = bestML - without;
+        if (t - b.acceptedAt >= 5) for (const alt of alternatives(best.term, o.grammar)) consider(alt, 'alt');
+        if (best.term !== b) {
+          const v = best.term;
+          if (v.family !== b.family || JSON.stringify(v.basis) !== JSON.stringify(b.basis)) notes.push(`croyance #${b.id} REQUALIFIÉE : ${TYPE_FR[b.family]} → ${TYPE_FR[v.family]} (gain log BF ${f2(best.ml - withB)})`);
+          else notes.push(`date de la croyance #${b.id} affinée : jour ${b.gate.tau} → ${v.gate.tau}`);
+          b.family = v.family; b.gate = { ...v.gate }; b.basis = { ...v.basis }; b.provisional = false;
+        }
+        if (b.provisional && t - b.acceptedAt >= 14) { b.provisional = false; notes.push(`croyance #${b.id} confirmée après expérience (${TYPE_FR[b.family]})`); }
+        const logBF = best.ml - mw.logML;
         b.logBF = logBF;
         if (logBF < 0) {
           A.beliefs = A.beliefs.filter((x) => x !== b);
           A.retracted.push({ ...b, retractedAt: t });
-          notes.push(`croyance #${b.id} (${b.type}, jour ${b.tau}) RÉTRACTÉE : les données ne la soutiennent plus (log BF ${f2(logBF)})`);
+          notes.push(`croyance #${b.id} (${TYPE_FR[b.family]}) RÉTRACTÉE : les données ne la soutiennent plus (log BF ${f2(logBF)})`);
         }
       }
       refit();
-      A.beliefs.forEach((b, i) => { b.coef = A.model.mn[9 + i]; b.narrative = narrate(b) + (b.end != null ? ` Effet terminé au jour ${b.end}.` : ''); });
+      syncCoefs();
+      // 1a. Recherche de fond : même sans alarme, une structure manque-t-elle à ma théorie ?
+      if (o.background && t >= WARMUP + 14) {
+        const H = searchExplanations(A.model, t + 1, { grammar: o.grammar, warmup: WARMUP, lookback: 63 });
+        const r = adjudicate(t, H, P_BACKGROUND, 'background');
+        if (r.accepted) notes.push(`DÉCOUVERTE en rêvant (${H.nCandidates} explications testées, P = ${(r.pChange * 100).toFixed(1)} %) : ${r.accepted.narrative}`);
+        else notes.push(`recherche de structure : ${H.nCandidates} explications testées, rien de convaincant (P(changement) ${(r.pChange * 100).toFixed(0)} %)`);
+      }
     }
     // 1b. Les règles apprises ne sont pas des dogmes : sans refus depuis 4 semaines, on les assouplit.
     if (o.learning) {
@@ -1145,20 +1519,25 @@ function createAgent(opts = {}) {
   A.elasticityNow = elasticityNow;
   A.levelNow = levelNow;
   A.predictor = (t) => predictor(A.model, t);
+  // prédiction du log-taux en régime permanent (marketing constant) — pour mesurer la fidélité du modèle
+  A.predictLog = (t, price, marketing) => A.model.predict({ t, dow: t % 7, price, marketing, ad: { 0.5: marketing, 0.8: marketing } }).mu;
   return A;
 }
 
+return { STAGES, createAgent };
+})();
 // ---- src/policies.js ----
+__m['policies'] = (() => {
 // Politiques de référence pour mesurer honnêtement la valeur de CORTEX.
-
-
+const { optimize } = __m['econ'];
+const { DOW_LOG } = __m['world'];
 
 // L'oracle connaît la vérité cachée (paramètres, événements, bruit σ) : borne supérieure.
 function createOracle(world) {
   return {
     name: 'Oracle (connaît la vérité cachée)',
     act(t) {
-      const sigma = world.scenario.noise;
+      const sigma = world.noiseSd(t);
       return optimize((p, m) => ({ mu: world.logRate(t, p, m), s: sigma }), world.cost(t));
     },
     observe() {},
@@ -1177,11 +1556,14 @@ function createHabit() {
 
 const _unused = DOW_LOG;
 
+return { createOracle, createHabit, _unused };
+})();
 // ---- src/runner.js ----
+__m['runner'] = (() => {
 // Orchestration d'une journée : matin (planification) → le monde vit → soir (bilan).
-
-
-
+const { createWorld } = __m['world'];
+const { createAgent } = __m['agent'];
+const { createOracle, createHabit } = __m['policies'];
 
 // Relecteur simulé (utilisé quand aucun humain n'est présent) : approuve si la proposition
 // bat le statu quo en espérance sans risque de perte excessif. Clairement étiqueté comme simulé.
@@ -1231,6 +1613,104 @@ function runEpisode({ seed = 1, days = 365, agentOpts = {}, policy = null, revie
   return { world, agent, log, profit: log.reduce((s, o) => s + o.profit, 0), reviews, approvals };
 }
 
+return { simulatedReviewer, publicObs, agentDay, policyDay, runEpisode };
+})();
+// ---- src/envs.js ----
+__m['envs'] = (() => {
+// Environnements : des commerces différents, chacun avec ses changements cachés.
+// L'agent est IDENTIQUE partout : il ne sait pas dans quel environnement il se trouve.
+// Les familles attendues (`expect`) servent uniquement à NOTER la compréhension dans le banc d'essai.
+const { makeRng } = __m['rng'];
+const { defaultScenario } = __m['world'];
+
+const base = (r, extra = {}) => ({ alpha: Math.log(r.uniform(110, 135)), beta: r.uniform(-1.95, -1.6), gamma: r.uniform(0.12, 0.2), noise: 0.12, baseCost: 1.2, events: [], ...extra });
+
+const ENVS = {
+  // contrôle : rien ne change → toute « découverte » est une fausse découverte
+  calme: { label: 'Monde calme (contrôle)', make: (seed) => base(makeRng(seed * 31 + 1)) },
+
+  boulangerie: {
+    label: 'Boulangerie (changements de CORTEX v1)',
+    make: (seed) => {
+      const sc = defaultScenario(seed);
+      sc.events[0].expect = ['level']; sc.events[2].expect = ['elasticity']; sc.events[3].expect = ['level'];
+      return sc;
+    },
+  },
+
+  glacier: {
+    label: 'Glacier (saison, canicule, seuil de prix)',
+    make: (seed) => {
+      const r = makeRng(seed * 31 + 2), sc = base(r);
+      const hw = Math.round(r.uniform(185, 230));
+      sc.events.push(
+        { type: 'season', amp: r.uniform(0.35, 0.5), peak: Math.round(r.uniform(180, 220)), label: 'Saison : la demande suit l’été', expect: ['season'], structural: true },
+        { type: 'threshold', start: Math.round(r.uniform(110, 150)), theta: 4.5, mag: Math.log(r.uniform(0.6, 0.72)), label: 'Une glace à plus de 4,50 € ne se vend plus', expect: ['threshold'] },
+        { type: 'level', start: hw, end: hw + 12, mag: Math.log(r.uniform(1.4, 1.6)), label: 'Canicule (12 jours)', expect: ['level'] },
+        { type: 'cost', start: Math.round(r.uniform(140, 170)), value: 1.6, label: 'Le lait augmente' },
+      );
+      return sc;
+    },
+  },
+
+  marche: {
+    label: 'Stand de marché (habitudes, érosion, volatilité)',
+    make: (seed) => {
+      const r = makeRng(seed * 31 + 3), sc = base(r);
+      sc.events.push(
+        { type: 'dow', start: Math.round(r.uniform(100, 140)), shift: [0, 0, 0.45, 0, 0, -0.45, 0], label: 'Le marché passe du samedi au mercredi', expect: ['dow'] },
+        { type: 'trend', start: Math.round(r.uniform(190, 230)), perDay: -r.uniform(0.003, 0.005), label: 'Un supermarché ouvre : érosion lente de la clientèle', expect: ['trend'] },
+        { type: 'variance', start: Math.round(r.uniform(260, 290)), factor: 1.9, label: 'Météo capricieuse : demande bien plus volatile', expect: ['variance'] },
+      );
+      return sc;
+    },
+  },
+
+  fleuriste: {
+    label: 'Fleuriste (pics récurrents, effet retard, concurrence)',
+    make: (seed) => {
+      const r = makeRng(seed * 31 + 4), sc = base(r, { gamma: r.uniform(0.18, 0.25) });
+      sc.events.push(
+        { type: 'adstock', start: 0, lambda: 0.7, label: 'La publicité agit sur plusieurs jours', expect: ['adstock'], structural: true },
+        { type: 'pulse', start: Math.round(r.uniform(50, 90)), period: 14, phase: r.int(0, 13), mag: Math.log(r.uniform(1.4, 1.6)), label: 'Jour de paie tous les 14 jours', expect: ['pulse'] },
+        { type: 'level', start: Math.round(r.uniform(150, 180)), end: null, mag: Math.log(r.uniform(0.7, 0.8)), label: 'Une jardinerie ouvre', expect: ['level'] },
+        { type: 'elasticity', start: Math.round(r.uniform(240, 270)), mag: r.uniform(-0.9, -0.6), label: 'Clients plus regardants sur le prix', expect: ['elasticity'] },
+      );
+      return sc;
+    },
+  },
+};
+const DEV_ENVS = ['calme', 'boulangerie', 'glacier', 'marche', 'fleuriste'];
+
+// ───────────────────────────────────────────────────────────────────────────────
+// ENVIRONNEMENT TENU SECRET (pré-enregistré) : écrit AVANT toute exécution, jamais utilisé
+// pendant le développement. Ses mécanismes ne sont PAS ceux de la grammaire : déclin en S
+// (logistique) au lieu d'une rampe, seuil de prix progressif (sigmoïde) au lieu d'une marche,
+// pics mensuels à date irrégulière (±1 j), saison d'amplitude et de phase aléatoires.
+// ───────────────────────────────────────────────────────────────────────────────
+const HELDOUT = {
+  kiosque: {
+    label: 'Kiosque de gare (tenu secret)',
+    make: (seed) => {
+      const r = makeRng(seed * 31 + 77), sc = base(r);
+      sc.events.push(
+        { type: 'season', amp: r.uniform(0.2, 0.3), peak: Math.round(r.uniform(0, 364)), label: 'Fréquentation saisonnière de la gare', expect: ['season'], structural: true },
+        { type: 'pulse', start: Math.round(r.uniform(40, 70)), period: 30, phase: r.int(0, 29), jitter: 1, mag: Math.log(r.uniform(1.4, 1.7)), label: 'Salon mensuel (date ±1 j)', expect: ['pulse'] },
+        { type: 'threshold', start: Math.round(r.uniform(90, 130)), theta: r.uniform(3.8, 4.6), soft: 0.15, mag: Math.log(r.uniform(0.55, 0.7)), label: 'Seuil de prix progressif (sigmoïde)', expect: ['threshold', 'curvature'] },
+        { type: 'logistic', start: 0, mid: Math.round(r.uniform(150, 200)), width: r.uniform(8, 15), mag: Math.log(r.uniform(0.6, 0.7)), label: 'Travaux : déclin en S de la fréquentation', expect: ['trend', 'level'] },
+        { type: 'variance', start: Math.round(r.uniform(230, 260)), factor: 1.7, label: 'Grèves : demande plus volatile', expect: ['variance'] },
+        { type: 'dow', start: Math.round(r.uniform(280, 320)), shift: [0, 0, 0, 0, 0, 0, -0.6], label: 'Fermeture partielle le dimanche', expect: ['dow'] },
+      );
+      return sc;
+    },
+  },
+};
+Object.assign(ENVS, HELDOUT);
+const TEST_ENVS = [...DEV_ENVS, 'kiosque'];
+
+return { ENVS, DEV_ENVS, HELDOUT, TEST_ENVS };
+})();
+for (const k of Object.keys(__m)) Object.assign(globalThis, __m[k]);
 </script>
 <script>
 // Interface de CORTEX — pilote le moteur réel (mêmes fichiers que les tests et le banc d'essai).
@@ -1243,7 +1723,8 @@ function runEpisode({ seed = 1, days = 365, agentOpts = {}, policy = null, revie
   let S = null, playing = false, timer = null, reviewer = 'human', showTruth = false, waiting = null;
 
   function newYear(seed, prerun = 0) {
-    S = { seed, world: createWorld(seed), agent: createAgent({ seed }), ow: createWorld(seed), hw: createWorld(seed), habit: createHabit(),
+    const env = $('env').value, mk = () => createWorld(seed, ENVS[env].make(seed));
+    S = { seed, env, world: mk(), agent: createAgent({ seed }), ow: mk(), hw: mk(), habit: createHabit(),
       log: [], olog: [], hlog: [], cum: [], ocum: [], hcum: [], trace: [], reviews: { ok: 0, no: 0 }, injected: [] };
     S.oracle = createOracle(S.ow);
     waiting = null; $('review').hidden = true;
@@ -1417,14 +1898,15 @@ function runEpisode({ seed = 1, days = 365, agentOpts = {}, policy = null, revie
       .concat(A.retracted.map((b) => `<div class="belief gone">${esc(b.narrative || b.type)}<span class="meta">rétractée au jour ${b.retractedAt} : les données ne la soutenaient plus</span></div>`));
     $('beliefs').innerHTML = items.length ? items.join('') : `<p class="empty">Aucune rupture admise. Le monde paraît conforme au modèle de base : prix, jour de la semaine, marketing.</p>`;
   }
-  const TYPE_LABEL = { level: 'rupture de niveau', elasticity: 'changement d’élasticité', marketing: 'effet marketing modifié', end: 'fin d’un effet temporaire' };
+  const TYPE_LABEL = FAMILY_FR;
+  const when = (tau) => (tau == null ? 'depuis toujours' : `au jour ${tau}`);
   function renderHyps() {
     const h = S.agent.hypothesisLog.at(-1);
     if (!h) { $('hyps').innerHTML = '<p class="empty">Aucune contradiction pour l’instant. Les hypothèses ne sont générées que lorsque les faits contredisent la théorie.</p>'; $('hyp-sub').textContent = ''; return; }
     $('hyp-sub').textContent = `jour ${h.t} · P(changement) ${Math.round(h.pChange * 100)} %`;
-    const rows = [{ label: 'rien n’a changé (bruit)', p: 1 - h.pChange }].concat(h.top.slice(0, 4).map((c) => ({ label: `${TYPE_LABEL[c.type]} au jour ${c.tau}`, p: c.post })));
+    const rows = [{ label: 'rien n’a changé (bruit)', p: 1 - h.pChange }].concat(h.top.slice(0, 4).map((c) => ({ label: `${TYPE_LABEL[c.type]} ${when(c.tau)}`, p: c.post })));
     $('hyps').innerHTML = rows.map((r) => `<div class="hbar"><div>${esc(r.label)}<div class="track"><div class="fill" style="width:${(r.p * 100).toFixed(1)}%"></div></div></div><div class="num">${(r.p * 100).toFixed(1)} %</div></div>`).join('')
-      + `<p class="note">${h.accepted ? `Retenue : ${TYPE_LABEL[h.accepted.type]} au jour ${h.accepted.tau}.` : 'Aucune hypothèse retenue : preuves insuffisantes.'} Probabilités a posteriori exactes (vraisemblance marginale) sur ${Object.keys(h.byType).length} familles d’explications.</p>`;
+      + `<p class="note">${h.accepted ? `Retenue : ${TYPE_LABEL[h.accepted.type]} ${when(h.accepted.tau)}.` : 'Aucune hypothèse retenue : preuves insuffisantes.'} ${h.nCandidates ?? ''} explications testées sur ${Object.keys(h.byType).length} familles ; probabilités a posteriori (vraisemblance marginale, ruptures de stock comprises).</p>`;
   }
   function renderLearning() {
     const A = S.agent, sk = A.skills.order;
@@ -1486,14 +1968,15 @@ function runEpisode({ seed = 1, days = 365, agentOpts = {}, policy = null, revie
     // vérité
     if (showTruth) {
       g.strokeStyle = css('--oracle'); g.setLineDash([4, 4]); g.lineWidth = 1.5;
-      for (const e of S.world.scenario.events) { if (e.type === 'cost') continue; for (const d of [e.start, e.end].filter((v) => v != null)) { g.beginPath(); g.moveTo(x(d), pad.t); g.lineTo(x(d), h - pad.b); g.stroke(); } }
+      for (const e of S.world.scenario.events) { if (e.type === 'cost' || e.structural) continue; for (const d of [e.type === 'logistic' ? e.mid : e.start, e.end].filter((v) => v != null)) { g.beginPath(); g.moveTo(x(d), pad.t); g.lineTo(x(d), h - pad.b); g.stroke(); } }
       g.setLineDash([]);
     }
     // croyances
     g.strokeStyle = css('--accent'); g.fillStyle = css('--accent'); g.lineWidth = 2; g.font = `600 11px ${css('--f-body')}`; g.textAlign = 'left';
     S.agent.beliefs.forEach((b) => {
       for (const d of [b.tau, b.end].filter((v) => v != null)) { g.beginPath(); g.moveTo(x(d), pad.t); g.lineTo(x(d), h - pad.b); g.stroke(); }
-      const lab = b.type === 'level' ? `${Math.exp(b.coef) - 1 >= 0 ? '+' : ''}${Math.round((Math.exp(b.coef) - 1) * 100)} %` : b.type === 'elasticity' ? 'élasticité' : 'marketing';
+      const c0 = b.coef?.[0] ?? 0;
+      const lab = b.type === 'level' ? `${Math.exp(c0) - 1 >= 0 ? '+' : ''}${Math.round((Math.exp(c0) - 1) * 100)} %` : (FAMILY_FR[b.type] || b.type).split(' ')[0];
       g.fillText(lab, Math.min(x(b.tau) + 4, w - 70), pad.t + 10);
     });
     // ventes
@@ -1547,6 +2030,8 @@ function runEpisode({ seed = 1, days = 365, agentOpts = {}, policy = null, revie
   $('step1').onclick = () => { stop(); if (!waiting) startDay(); renderAll(true); };
   $('step7').onclick = () => { stop(); for (let i = 0; i < 7 && !waiting; i++) if (startDay() !== 'ok') break; renderAll(); };
   $('reset').onclick = () => { stop(); newYear(Math.max(1, Math.min(9999, +$('seed').value || 1)), 0); };
+  $('env').onchange = () => { stop(); newYear(Math.max(1, Math.min(9999, +$('seed').value || 1)), 0); };
+  $('env').innerHTML = Object.entries(ENVS).map(([k, v]) => `<option value="${k}"${k === 'marche' ? ' selected' : ''}>${v.label}</option>`).join('');
   $('rv-approve').onclick = () => decide('approve');
   $('rv-reject').onclick = () => decide('reject');
   $('inject-go').onclick = () => inject($('inject').value);
@@ -1562,7 +2047,8 @@ function runEpisode({ seed = 1, days = 365, agentOpts = {}, policy = null, revie
 
   buildRing();
   // État de départ réaliste : 98 jours déjà vécus (relecteur simulé), juste avant l'arrivée du concurrent.
-  newYear(1, 98);
+  // État de départ : le stand de marché, 140 jours vécus — l'habitude du samedi vient de se déplacer.
+  newYear(1, 140);
 })();
 
 </script>

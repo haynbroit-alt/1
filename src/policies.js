@@ -7,7 +7,7 @@ export function createOracle(world) {
   return {
     name: 'Oracle (connaît la vérité cachée)',
     act(t) {
-      const sigma = world.scenario.noise;
+      const sigma = world.noiseSd(t);
       return optimize((p, m) => ({ mu: world.logRate(t, p, m), s: sigma }), world.cost(t));
     },
     observe() {},
