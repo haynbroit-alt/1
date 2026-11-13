@@ -312,7 +312,10 @@ export function createBrain(body, opts = {}) {
     // l'incertitude (entre mondes plausibles) de son avantage ; C3 : ce bonus grandit avec le temps depuis
     // le dernier essai (le monde a pu changer). On ne renonce pas à une option prometteuse mais incertaine.
     let exploring = false;
-    if (o.explore && t >= 7 && t < 330 && discLevers.length) {
+    // (dev v5-dev1) : l'exploration ne contredit jamais une stratégie que le planificateur vient d'adopter,
+    // au plus un essai par semaine et par option, coût espéré borné à 10 % de la valeur du jour
+    const planned = A.strategy && A.strategy.t === t;
+    if (o.explore && t >= 7 && t < 330 && discLevers.length && !planned) {
       const sps = [...samples, samplePreds(t, ctx), samplePreds(t, ctx)];
       const base = proposal, vb = sps.map((sp) => withCapacity(body, base.action, sp, ctx).value);
       let best = null;
@@ -321,10 +324,14 @@ export function createBrain(body, opts = {}) {
         const cand = withCapacity(body, { ...base.action, [l.key]: val }, P, ctx);
         const d = sps.map((sp, i) => withCapacity(body, cand.action, sp, ctx).value - vb[i]);
         const md = d.reduce((x, y) => x + y, 0) / d.length, U = Math.sqrt(d.reduce((x, y) => x + (y - md) ** 2, 0) / (d.length - 1));
-        const stale = o.challenge ? t - (A.lastUsed[`${l.key}=${val}`] ?? -60) : 0;
-        const bonus = U * Math.sqrt(1 + stale / 30) * Math.sqrt(Math.max(0, 365 - t) / 365);
+        const last = A.lastUsed[`${l.key}=${val}`] ?? -60;
+        if (t - last < 7) continue;
+        const stale = o.challenge ? t - last : 0;
+        const bonus = U * Math.min(2, Math.sqrt(1 + stale / 60)) * Math.sqrt(Math.max(0, 365 - t) / 365);
+        const gap = base.value - cand.value;
+        if (gap > 0.1 * Math.abs(base.value) + 5) continue;
         const score = cand.value - base.value + bonus;
-        if (score > 0 && (!best || score > best.score)) best = { cand, score, l, val, U, stale, gap: base.value - cand.value };
+        if (score > 0 && (!best || score > best.score)) best = { cand, score, l, val, U, stale, gap };
       }
       if (best) {
         proposal = best.cand; exploring = true;
