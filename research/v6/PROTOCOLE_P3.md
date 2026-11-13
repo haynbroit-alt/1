@@ -28,3 +28,15 @@ Dans P2, GALILÉE proposait souvent la **bonne structure** (`u1·u0/4` pour 0,3�
 **Critère d'abandon** : si D2 échoue, un plan adaptatif mal construit casse la garantie, et le composant D est rejeté sous cette forme.
 
 **Hors du champ de P3, prévu pour P4** : plans d'expériences pour les modes lents (paliers maintenus), et arbitrage avec le profit.
+
+## Journal de développement (graines 1 à 100 ; hypothèses et seuils inchangés)
+1. **D2 était impossible à mesurer tel que défini.** Sur des écarts mélangés et dans les mondes compris, GALILÉE ne rend **que des constantes** (100 sur 100). Elles ne sont pas testables, donc jamais confirmées. Pour éprouver la garantie sous plan adaptatif, D2 inclut désormais des **formules non constantes injectées**, fausses par construction, dans les mondes compris : u₀², |u₀|, u₀·u₁, cos(π·u₀), u₀³, u₀²·u₁, deux par monde. Chacune est jugée sous un plan actif construit **pour la confirmer**.
+2. **Le plan glouton (bloc par bloc) était défectueux.** Il dépensait tout le budget de u₁ dès les premiers blocs, au même u₀, ce qui rendait u₀·u₁ exactement colinéaire à la nuisance : log E ≈ 0 pour toutes les interactions, même l'oracle. Il est remplacé par une **optimisation du plan entier** (échanges simples et par paires, type Fedorov), avec trois départs faisables et variés.
+
+| Développement (100 mondes) | Passif | Habitude | Actif (glouton) | Actif (plan entier) |
+|---|---:|---:|---:|---:|
+| Formules de GALILÉE confirmées (9) | 22 % | 0 % | 44 % | **100 %** |
+| Plafond oracle, plan pour la vraie forme | — | — | 20 % | 60 % |
+| Fausses confirmations, formules injectées | — | — | 1/100 | 1/100 |
+
+**Commande de test (exécution unique)** : `node research/v6/p3.js --seeds 5001-5400` en 4 tranches parallèles, puis `node research/v6/p3-report.js research/v6/p3-test.json --md research/v6/RESULTATS_P3.md`.
