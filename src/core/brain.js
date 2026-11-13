@@ -21,7 +21,10 @@ const truncMean = (a) => Math.exp(-0.5 * a * a) / Math.sqrt(2 * Math.PI) / Math.
 
 export function createBrain(body, opts = {}) {
   // curiosity : testée en développement (v4-dev1) puis désactivée — aucun gain de profit, compréhension −9 ± 7 pts
-  const o = { seed: 1, discovery: true, background: true, omnibus: true, vigilance: true, window: null, memory: true, planning: true, curiosity: false, horizon: 21, ...opts };
+  const o = { seed: 1, discovery: true, background: true, omnibus: true, vigilance: true, window: null, memory: true, planning: true, curiosity: false, horizon: 21,
+    // v5 : C1 exploration par la valeur de l'information · C2 variables latentes inventées · C3 remise en cause · C4 incompréhension
+    // C3 (challenge) : désactivée après développement (v5-dev2 : −30,6 ± 28,6 k€/an, fausses alertes de dérive) — évaluée en variante
+    explore: true, invent: true, challenge: false, perplexity: true, ...opts };
   o.families ??= FAMILIES;
   const rng = makeRng(o.seed * 7919 + 3);
   const levers = body.levers, ctxDefs = body.context ?? [];
@@ -44,14 +47,46 @@ export function createBrain(body, opts = {}) {
     for (const l of discLevers) latentDefs.push({ key: `since:${l.key}`, label: `jours depuis « ${l.label} »`, of: l.label, latent: true, latentKind: 'since', lever: l.key, transform: 'lin', ref: 0, scale: 10, continuous: true });
     for (const ox of body.outcomes) latentDefs.push({ key: `lag:${ox.key}`, label: `${ox.label} de la veille`, of: ox.label, latent: true, latentKind: 'lag', outcome: ox.key, transform: 'lin', ref: 0, scale: 1, continuous: true });
   }
+  // C2 — VARIABLES LATENTES INVENTÉES : dynamiques amorties composées à partir de plusieurs sources
+  // (mesures et leviers déclarés) : z ← λ·z + (1−λ)·Σ wₖ·uₖ/échelleₖ, avec au plus deux sources (w = +1/−1).
+  // Mémoires lentes d'une mesure, « stocks » (différence de deux flux), écart entre un flux et un levier…
+  // Aucune n'est prévue pour une activité : c'est un espace combinatoire, trié ensuite par la preuve.
+  const invSources = [...body.outcomes.map((x) => ({ key: x.key, label: x.label, kind: 'outcome' })), ...decLevers.map((l) => ({ key: l.key, label: l.label, kind: 'lever' }))];
+  const invDefs = [];
+  if (o.invent) {
+    const outs = invSources.filter((x) => x.kind === 'outcome');
+    for (const lam of [0.9, 0.97]) {
+      for (const a of outs) invDefs.push({ terms: [[a, 1]], lam });
+      for (let i = 0; i < invSources.length; i++) for (let j = i + 1; j < invSources.length; j++) {
+        if (invSources[i].kind !== 'outcome' && invSources[j].kind !== 'outcome') continue;
+        invDefs.push({ terms: [[invSources[i], 1], [invSources[j], -1]], lam });
+      }
+    }
+    invDefs.forEach((d, i) => {
+      d.key = `inv${i}`;
+      d.label = d.terms.length === 1 ? `mémoire lente de « ${d.terms[0][0].label} » (λ=${d.lam})` : `accumulation cachée « ${d.terms[0][0].label} » − « ${d.terms[1][0].label} » (λ=${d.lam})`;
+      latentDefs.push({ key: d.key, label: d.label, of: d.label, latent: true, latentKind: 'inv', inv: d, transform: 'lin', ref: 0, scale: 1, continuous: true });
+    });
+  }
+  const invScale = {};
+  const invStep = (z, d, src) => d.lam * z + (1 - d.lam) * d.terms.reduce((s, [u, w]) => s + w * (src[u.key] ?? 0) / (invScale[u.key] || 1), 0);
   const isActive = (l, v) => v !== l.values[0];
-  const freshState = () => ({ ema: Object.fromEntries(decLevers.map((l) => [l.key, { 0.7: l.init, 0.9: l.init }])), since: Object.fromEntries(discLevers.map((l) => [l.key, 0])), lag: {} });
+  const freshState = () => ({ ema: Object.fromEntries(decLevers.map((l) => [l.key, { 0.7: l.init, 0.9: l.init }])), since: Object.fromEntries(discLevers.map((l) => [l.key, 0])), lag: {}, inv: {} });
   // valeurs des variables construites pour une action donnée, à partir de l'état de la veille
+  // (performance) la partie qui ne dépend que de l'état de la veille est calculée une fois par état
+  const stCache = new WeakMap();
+  const stateOnly = (st) => {
+    let c = stCache.get(st);
+    if (!c) { c = {}; for (const d of latentDefs) if (d.latentKind === 'inv') c[d.key] = st.inv?.[d.key] ?? 0; else if (d.latentKind === 'lag') c[d.key] = st.lag[d.outcome] ?? null; stCache.set(st, c); }
+    return c;
+  };
   const derived = (st, a) => {
-    const x = {};
+    const x = { ...stateOnly(st) };
     for (const d of latentDefs) {
+      if (d.latentKind === 'inv' || d.latentKind === 'lag') continue;
       if (d.latentKind === 'ema') x[d.key] = (1 - d.lambda) * a[d.lever] + d.lambda * st.ema[d.lever][d.lambda];
       else if (d.latentKind === 'since') { const l = discLevers.find((y) => y.key === d.lever); x[d.key] = isActive(l, a[d.lever]) ? 0 : st.since[d.lever] + 1; }
+      else if (d.latentKind === 'inv') x[d.key] = st.inv?.[d.key] ?? 0;
       else x[d.key] = st.lag[d.outcome] ?? null;
     }
     return x;
@@ -60,15 +95,16 @@ export function createBrain(body, opts = {}) {
     ema: Object.fromEntries(decLevers.map((l) => [l.key, { 0.7: 0.3 * a[l.key] + 0.7 * st.ema[l.key][0.7], 0.9: 0.1 * a[l.key] + 0.9 * st.ema[l.key][0.9] }])),
     since: Object.fromEntries(discLevers.map((l) => [l.key, isActive(l, a[l.key]) ? 0 : st.since[l.key] + 1])),
     lag: { ...st.lag, ...logOut },
+    inv: Object.fromEntries(invDefs.map((d) => [d.key, invStep(st.inv?.[d.key] ?? 0, d, { ...a, ...Object.fromEntries(Object.entries(logOut).map(([k, v]) => [k, Math.exp(v)])) })])),
   });
   const M = {};
   for (const out of body.outcomes) {
     const space = makeSpace(out, [...out.inputs.map((k) => describe(k, out)), ...latentDefs.map((d) => ({ ...d }))]);
-    M[out.key] = { out, space, records: [], beliefs: [], retracted: [], hypLog: [], model: null, kappa: 1, cusum: { pos: 0, neg: 0 }, ec: {}, vc: 0, lastZ: null, probe: null, nextId: 1 };
+    M[out.key] = { out, space, records: [], beliefs: [], retracted: [], hypLog: [], model: null, kappa: 1, cusum: { pos: 0, neg: 0 }, ec: {}, vc: 0, lastZ: null, probe: null, nextId: 1, ls: [], perplexed: false, perplexDays: 0 };
   }
   const A = {
     body, opts: o, M, stageCount: Object.fromEntries(STAGES.map(([k]) => [k, 0])), today: null, history: [], insights: [],
-    ad: Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: l.init, 0.8: l.init }])), dstate: null, tried: {}, lastCurious: -99, curiositySpent: 0, cum: 0, experimentUntil: -1, maxStep: 0.15, expLever: null, expCooldown: {},
+    ad: Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: l.init, 0.8: l.init }])), dstate: null, tried: {}, lastCurious: -99, curiositySpent: 0, cum: 0, lastUsed: {}, rcusum: { pos: 0, neg: 0 }, forceSearch: false, perplexLog: [], experimentUntil: -1, maxStep: 0.15, expLever: null, expCooldown: {},
   };
   const trace = [];
   const emit = (stage, text, data = {}) => { A.stageCount[stage]++; trace.push({ t: A.today?.t ?? null, stage, text, data }); };
@@ -80,8 +116,10 @@ export function createBrain(body, opts = {}) {
   const adFor = (a) => Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: 0.5 * a[l.key] + 0.5 * A.ad[l.key][0.5], 0.8: 0.2 * a[l.key] + 0.8 * A.ad[l.key][0.8] }]));
   A.dstate = freshState();
   const rec = (t, a, ctx, st = A.dstate) => ({ t, dow: t % 7, x: { ...a, ...ctx, ...derived(st, a) }, ad: adFor(a) });
-  const preds = (t, ctx, st = A.dstate) => Object.fromEntries(Object.values(M).map((m) => [m.out.key, (a) => { const p = m.model.predict(rec(t, a, ctx, st)); return { mu: p.mu, s: p.scale * m.kappa }; }]));
-  const samplePreds = (t, ctx, st = A.dstate) => Object.fromEntries(Object.values(M).map((m) => { const s = m.model.sample(rng); return [m.out.key, (a) => { const r = rec(t, a, ctx, st); return { mu: m.model.muWith(s.theta, r), s: s.sigma * Math.sqrt(varianceWeight(t, m.beliefs)) }; }]; }));
+  // (performance) un même enregistrement est partagé entre les mesures pour une action donnée
+  const recCache = (t, ctx, st) => { const c = new Map(); return (a) => { const k = decLevers.map((l) => a[l.key]).join('|'); let r = c.get(k); if (!r) { r = rec(t, a, ctx, st); c.set(k, r); } return r; }; };
+  const preds = (t, ctx, st = A.dstate) => { const R = recCache(t, ctx, st); return Object.fromEntries(Object.values(M).map((m) => [m.out.key, (a) => { const p = m.model.predict(R(a)); return { mu: p.mu, s: p.scale * m.kappa }; }])); };
+  const samplePreds = (t, ctx, st = A.dstate) => { const R = recCache(t, ctx, st); return Object.fromEntries(Object.values(M).map((m) => { const s = m.model.sample(rng); return [m.out.key, (a) => { const r = R(a); return { mu: m.model.muWith(s.theta, r), s: s.sigma * Math.sqrt(varianceWeight(t, m.beliefs)) }; }]; })); };
 
   // ---------- PLANIFICATION : découvrir des stratégies dans son propre modèle ----------
   // Familles de plans : statu quo optimisé, et pour chaque levier discret, chaque valeur, chaque période
@@ -137,6 +175,7 @@ export function createBrain(body, opts = {}) {
 
   // ---------- hypothèses (par mesure) ----------
   function adjudicate(m, t, H, threshold, origin) {
+    if (m.perplexed) threshold = Math.max(threshold, 0.99999); // C4 : je ne comprends pas cette mesure → je n'empile plus d'explications
     const pChange = 1 - H.pNull;
     const fams = Object.entries(H.famMass).sort((a, b) => b[1] - a[1]);
     let accepted = null, ambiguous = false;
@@ -178,7 +217,8 @@ export function createBrain(body, opts = {}) {
       const lvlA = m.cusum.pos > CH || m.cusum.neg > CH;
       const prA = Object.entries(m.ec).find(([, v]) => v.pos > EH || v.neg > EH);
       const surA = o.omnibus && m.vc > VH;
-      if (!(lvlA || prA || surA)) continue;
+      const stratA = A.forceSearch; // C3 : ma stratégie ne donne plus les résultats prévus
+      if (!(lvlA || prA || surA || stratA)) continue;
       emit('confronter', `Contradiction sur « ${m.out.label} » : ${[lvlA && 'écart durable à la théorie', prA && `erreurs corrélées à « ${m.space.inputs.find((x) => x.key === prA[0]).label} »`, surA && 'surprise anormale (mécanisme inconnu ?)'].filter(Boolean).join(' ; ')}.`, { outcome: m.out.key, verdict: 'contradiction' });
       if (!o.discovery) { m.cusum = { pos: 0, neg: 0 }; m.ec = {}; m.vc = 0; continue; }
       const H = searchExplanations(m.space, m.model, t, { warmup: WARMUP, families: o.families, records: data(m) });
@@ -198,6 +238,7 @@ export function createBrain(body, opts = {}) {
       A.experimentUntil = Math.max(A.experimentUntil, t + 10); A.expLever = k; A.expCooldown[k] = t + 40;
       emit('confronter', `Soupçon : mes erreurs sur « ${m.out.label} » se corrèlent à « ${lv.label} » → expérience ciblée de 10 jours (variations de ±15 %).`, { verdict: 'soupcon', lever: k });
     }
+    A.forceSearch = false;
     if (!trace.some((e) => e.stage === 'confronter')) emit('confronter', t < WARMUP ? `Phase d'apprentissage (${t}/${WARMUP}).` : `Confirmation : les faits d'hier sont compatibles avec ma théorie.`, { verdict: t < WARMUP ? 'apprentissage' : 'confirmation' });
 
     // ANTICIPER / PRIORISER
@@ -268,18 +309,49 @@ export function createBrain(body, opts = {}) {
         }
       }
     }
+    // C1 — EXPLORATION PAR LA VALEUR DE L'INFORMATION : chaque option discrète reçoit un bonus égal à
+    // l'incertitude (entre mondes plausibles) de son avantage ; C3 : ce bonus grandit avec le temps depuis
+    // le dernier essai (le monde a pu changer). On ne renonce pas à une option prometteuse mais incertaine.
+    let exploring = false;
+    // (dev v5-dev1) : l'exploration ne contredit jamais une stratégie que le planificateur vient d'adopter,
+    // au plus un essai par semaine et par option, coût espéré borné à 10 % de la valeur du jour
+    const planned = A.strategy && A.strategy.t === t;
+    if (o.explore && t >= 7 && t < 330 && discLevers.length && !planned) {
+      const sps = [...samples, samplePreds(t, ctx), samplePreds(t, ctx)];
+      const base = proposal, vb = sps.map((sp) => withCapacity(body, base.action, sp, ctx).value);
+      let best = null;
+      for (const l of discLevers) for (const val of l.values) {
+        if (val === base.action[l.key]) continue;
+        const cand = withCapacity(body, { ...base.action, [l.key]: val }, P, ctx);
+        const d = sps.map((sp, i) => withCapacity(body, cand.action, sp, ctx).value - vb[i]);
+        const md = d.reduce((x, y) => x + y, 0) / d.length, U = Math.sqrt(d.reduce((x, y) => x + (y - md) ** 2, 0) / (d.length - 1));
+        const last = A.lastUsed[`${l.key}=${val}`] ?? -60;
+        if (t - last < 7) continue;
+        const stale = o.challenge ? t - last : 0;
+        const bonus = U * Math.min(2, Math.sqrt(1 + stale / 60)) * Math.sqrt(Math.max(0, 365 - t) / 365);
+        const gap = base.value - cand.value;
+        if (gap > 0.1 * Math.abs(base.value) + 5) continue;
+        const score = cand.value - base.value + bonus;
+        if (score > 0 && (!best || score > best.score)) best = { cand, score, l, val, U, stale, gap };
+      }
+      if (best) {
+        proposal = best.cand; exploring = true;
+        note += ` EXPLORATION : « ${best.l.label} » = ${best.val} (coût espéré ${num(Math.max(0, best.gap))} €, incertitude de son avantage ±${num(best.U)} €${best.stale > 30 ? `, pas essayé depuis ${best.stale} j` : ''}).`;
+      }
+    }
     emit('decider', `Décision : ${levers.map((l) => `${l.label} ${num(proposal.action[l.key])}`).join(', ')} ; valeur espérée ${num(proposal.value)} €.${note}`, { action: proposal.action, mode });
 
     // SIMULER : bac à sable sur la postérieure + règle de risque
     const fallback = withCapacity(body, cur, P, ctx);
     const sim = (a) => { const v = []; for (let i = 0; i < 40; i++) v.push(expectedReward(body, a, samplePreds(t, ctx), ctx)); v.sort((x, y) => x - y); return { mean: v.reduce((s, x) => s + x, 0) / v.length, p10: v[4], pLoss: v.filter((x) => x < 0).length / v.length }; };
     const sp = sim(proposal.action), sf = sim(fallback.action);
+    A.today.value = sp.mean; A.today.vsd = Math.max(1e-6, (sp.mean - sp.p10) / 1.28);
     const reasons = [];
     if (sp.pLoss > Math.max(0.3, sf.pLoss + 0.1)) reasons.push(`P(perte) ${Math.round(sp.pLoss * 100)} %`);
     for (const l of decLevers) {
       const seen = A.history.map((h) => h.action[l.key]);
       if (!seen.length) continue;
-      if (l.kind === 'discrete' && !curious && !seen.includes(proposal.action[l.key])) reasons.push(`« ${l.label} » = ${proposal.action[l.key]} jamais essayé`);
+      if (l.kind === 'discrete' && !curious && !exploring && !seen.includes(proposal.action[l.key])) reasons.push(`« ${l.label} » = ${proposal.action[l.key]} jamais essayé`);
       if (l.kind === 'continuous') { const lo = Math.min(...seen), hi = Math.max(...seen), v = proposal.action[l.key]; if (v < lo / 1.2 || v > hi * 1.2) reasons.push(`« ${l.label} » hors du domaine observé`); }
     }
     let action = proposal.action, how = 'auto';
@@ -311,6 +383,24 @@ export function createBrain(body, opts = {}) {
       if (r.censored) impute(m, r);
       const z = (y - pr.mu) / pr.s;
       r.inside = r.censored ? null : Math.abs(z) <= Z80;
+      // C4 — TEST D'ADÉQUATION : ma théorie prédit-elle mieux qu'un simple prolongement des derniers jours ?
+      if (o.perplexity && !r.censored && m.records.length >= 14) {
+        const prev = m.records.slice(-7).map((x) => (x.censored ? x.yImp : x.y)), nm = prev.reduce((s2, v) => s2 + v, 0) / prev.length;
+        const resid = m.records.slice(-28).map((x) => (x.censored ? x.yImp : x.y) - nm), ns = Math.max(0.05, Math.sqrt(resid.reduce((s2, v) => s2 + v * v, 0) / resid.length));
+        const lsM = -Math.log(pr.s) - 0.5 * z * z, lsN = -Math.log(ns) - 0.5 * ((y - nm) / ns) ** 2;
+        m.ls.push(lsM - lsN); if (m.ls.length > 28) m.ls.shift();
+        const recent = m.beliefs.filter((b) => b.acceptedAt > t - 60).length;
+        const adv = m.ls.reduce((s2, v) => s2 + v, 0) / m.ls.length;
+        if (!m.perplexed && t >= WARMUP + 14 && m.ls.length >= 20 && (adv < -0.05 || recent >= 4)) {
+          m.perplexed = true; m.kappa = Math.max(m.kappa, 1.3);
+          A.perplexLog.push({ t, outcome: m.out.key, on: true, adv, recent });
+          emit('confronter', `JE NE COMPRENDS PAS « ${m.out.label} » : ${adv < -0.05 ? 'un simple prolongement des derniers jours prédit mieux que ma théorie' : `j'ai dû ajouter ${recent} explications en deux mois`}. Je cesse d'empiler des hypothèses sur cette mesure et j'élargis mon incertitude.`, { perplexed: true, outcome: m.out.key });
+        } else if (m.perplexed && adv > 0.05 && recent < 4) {
+          m.perplexed = false; A.perplexLog.push({ t, outcome: m.out.key, on: false, adv });
+          emit('confronter', `Je comprends de nouveau « ${m.out.label} » : ma théorie prédit mieux que le prolongement naïf.`, { perplexed: false, outcome: m.out.key });
+        }
+        if (m.perplexed) m.perplexDays++;
+      }
       lines.push(`${m.out.label} ${num(obs.outcomes[m.out.key])}${r.censored ? ' (plafonné)' : ''} (z=${z.toFixed(2)})`);
       if (t >= WARMUP - 1) {
         let zc = Math.max(-6, Math.min(6, z));
@@ -336,8 +426,30 @@ export function createBrain(body, opts = {}) {
       refit(m); syncCoefs(m);
     }
     for (const l of decLevers) A.ad[l.key] = ad[l.key];
+    for (const l of discLevers) A.lastUsed[`${l.key}=${a[l.key]}`] = t;
+    // C3 — REMISE EN CAUSE : le résultat réalisé s'écarte-t-il durablement de ce que ma stratégie promettait ?
+    if (o.challenge && A.today.value != null && t >= WARMUP) {
+      const rz = Math.max(-6, Math.min(6, (obs.reward - A.today.value) / A.today.vsd));
+      A.rcusum.pos = Math.max(0, A.rcusum.pos + rz - 0.5); A.rcusum.neg = Math.max(0, A.rcusum.neg - rz - 0.5);
+      if (A.rcusum.pos > 8 || A.rcusum.neg > 8) {
+        emit('mesurer', `Ma stratégie ne donne plus les résultats prévus (${A.rcusum.neg > A.rcusum.pos ? 'en dessous' : 'au-dessus'} de mes prévisions depuis plusieurs jours) : je remets en cause mes croyances et je ré-explore mes options.`, { challenge: true });
+        A.rcusum = { pos: 0, neg: 0 }; A.forceSearch = true; A.lastUsed = {}; A.experimentUntil = Math.max(A.experimentUntil, t + 7);
+      }
+    }
     for (const l of discLevers) A.tried[`${l.key}=${a[l.key]}`] = (A.tried[`${l.key}=${a[l.key]}`] ?? 0) + 1;
     A.dstate = nextState(A.dstate, a, Object.fromEntries(body.outcomes.map((x) => [x.key, Math.log(Math.max(obs.outcomes[x.key], 0.5))])));
+    // C2 : à la fin de l'échauffement, échelles fixées et séries latentes recalculées rétroactivement
+    if (invDefs.length && t === WARMUP - 1) {
+      for (const u of invSources) { const v = A.history.map((h) => Math.abs(u.kind === 'outcome' ? h.outcomes[u.key] : h.action[u.key])); invScale[u.key] = Math.max(1e-6, v.reduce((x, y) => x + y, 0) / v.length); }
+      const z = Object.fromEntries(invDefs.map((d) => [d.key, 0]));
+      for (const h of A.history) {
+        for (const m2 of Object.values(M)) { const r2 = m2.records.find((x) => x.t === h.t); if (r2) for (const d of invDefs) r2.x[d.key] = z[d.key]; }
+        const src = { ...h.action, ...h.outcomes };
+        for (const d of invDefs) z[d.key] = invStep(z[d.key], d, src);
+      }
+      A.dstate.inv = z;
+      Object.values(M).forEach((m2) => { refit(m2); syncCoefs(m2); });
+    }
     emit('mesurer', `Résultat : ${lines.join(', ')} ; ${num(obs.reward)} € (cumul ${num(A.cum)} €).`, { reward: obs.reward });
     emit('apprendre', `Épisode ${t} mémorisé.`);
     emit('reviser', `Postérieures mises à jour (${Object.values(M).map((m) => `${m.out.label} : ${m.model.n} obs.`).join(', ')}).`);
@@ -386,6 +498,7 @@ export function createBrain(body, opts = {}) {
 
   A.planDay = planDay; A.observeOutcome = observeOutcome;
   A.beliefs = () => Object.values(M).flatMap((m) => m.beliefs.map((b) => ({ ...b, outcome: m.out.key })));
+  A.perplexity = () => ({ log: A.perplexLog, days: Object.fromEntries(Object.values(M).map((m) => [m.out.key, m.perplexDays])) });
   A.retracted = () => Object.values(M).flatMap((m) => m.retracted.map((b) => ({ ...b, outcome: m.out.key })));
   // log-moyenne prédite d'une mesure (régime permanent des effets retard) — pour mesurer la fidélité du modèle
   A.predictLog = (k, t, a, ctx) => M[k].model.predict({ t, dow: t % 7, x: { ...a, ...ctx, ...derived(A.dstate, a) }, ad: Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: a[l.key], 0.8: a[l.key] }])) }).mu;
