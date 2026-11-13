@@ -24,7 +24,7 @@ function mk(space, family, gate, basis) {
 function dated(space, family, tau) {
   const S = (basis) => mk(space, family, { kind: 'step', tau, end: null }, basis);
   const J = space.inputs.map((_, j) => j).filter((j) => !space.inputs[j].latent);
-  const LAT = space.inputs.map((_, j) => j).filter((j) => space.inputs[j].latent);
+  const LAT = space.inputs.map((_, j) => j).filter((j) => space.inputs[j].latent && space.inputs[j].latentKind !== 'inv');
   switch (family) {
     case 'level': return [S({ kind: 'const' }), ...WIDTHS.map((width) => mk(space, family, { kind: 'sigmoid', tau, width, end: null }, { kind: 'const' }))];
     case 'trend': return [mk(space, family, { kind: 'ramp', tau, end: null }, { kind: 'const' })];
@@ -172,6 +172,7 @@ export function narrate(space, term, coef) {
     case 'in':
       if (inp.latent) {
         if (inp.latentKind === 'since') return `${since}${until}, tous les 10 jours sans « ${inp.of} », ${what} ${v('change', 'changent')} de ${pct(Math.exp(c * 10 / (inp.scale ?? 1)) - 1)} (effet cumulatif ; agir sur « ${inp.of} » le remet à zéro).`;
+        if (inp.latentKind === 'inv') return `${what} ${v('dépend', 'dépendent')} d'une variable cachée que j'ai INVENTÉE : ${inp.label} (coefficient ${c >= 0 ? '+' : ''}${c.toFixed(2)}).`;
         if (inp.latentKind === 'lag') return `${since}${until}, ${what} ${v('dépend', 'dépendent')} de ${v('sa', 'leur')} valeur de la veille (inertie, coefficient ${c.toFixed(2)}).`;
         return `${since}${until}, ${what} ${v('dépend', 'dépendent')} de la mémoire récente de « ${inp.of} » (persistance λ = ${inp.lambda}) : son effet s'installe et s'efface sur plusieurs jours.`;
       }
