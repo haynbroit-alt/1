@@ -38,6 +38,8 @@ export function makeWorld(seed, kind = kindOf(seed), opts = {}) {
       modes.push({ tau, lam: 1 - 1 / tau, target: r.int(0, K - 1), sources: idx.map((j, q) => ({ idx: j, w: (q === 0 ? 1 : r.uniform(0.4, 1)) * (r.next() < 0.5 ? -1 : 1) })), strength: r.uniform(0.05, 0.25), a: 1 });
     }
   }
+  // P3 : leviers imposés (plan d'expériences) à partir d'un jour donné ; rien ne change avant
+  if (opts.overrideU) for (let t = 0; t < T; t++) { const v = opts.overrideU(t); if (v) U[t] = [...v]; }
   if (opts.flouLever != null) {
     const r3 = makeRng(seed * 37 + 11);
     modes.length = 0;
