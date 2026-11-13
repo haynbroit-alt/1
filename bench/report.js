@@ -3,11 +3,12 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { POLICIES } from './policies-def.js';
 // plusieurs fichiers : les suivants remplacent les mêmes (politique, environnement, graine)
-const files = process.argv.slice(2).filter((a) => a.endsWith('.json') && !process.argv[process.argv.indexOf(a) - 1]?.startsWith('--'));
+const files = process.argv.slice(2).filter((a, i, arr) => a.endsWith('.json') && !(arr[i - 1] ?? '').startsWith('--md'));
 const file = files.join(' + ');
 const merged = new Map();
 for (const f of files) for (const r of JSON.parse(readFileSync(f, 'utf8'))) merged.set(`${r.policy}|${r.env}|${r.seed}`, r);
-const R = [...merged.values()];
+const envFilter = process.argv.includes('--env') ? process.argv[process.argv.indexOf('--env') + 1].split(',') : null;
+const R = [...merged.values()].filter((r) => !envFilter || envFilter.includes(r.env));
 // tolérance de date : 14 jours ; pour un pic périodique, une période (son début n'est datable qu'à une période près)
 const TOL = 14;
 const tolFor = (e) => (e.type === 'pulse' ? Math.max(TOL, e.period ?? 14) : TOL);
