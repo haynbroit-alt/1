@@ -12,7 +12,8 @@ const diff = d1.map((x) => x.actif - x.passif), md = mean(diff), sd = Math.sqrt(
 // D2 : fausses confirmations sous plan actif
 const fM = forme.flatMap((r) => Object.entries(r.plans['actif-melange'] ?? {}).filter(([, v]) => v && !v.constant).map(([, v]) => +v.accepted));
 const fC = comp.flatMap((r) => Object.entries(r.plans['actif-reel'] ?? {}).filter(([k, v]) => k.startsWith('galilee:') && v && !v.constant).map(([, v]) => +v.accepted));
-const fAll = [...fM, ...fC], w2 = wilson(fAll.reduce((s, x) => s + x, 0), fAll.length);
+const fI = comp.flatMap((r) => (r.injected ?? []).map((x) => +x.accepted));
+const fAll = [...fM, ...fC, ...fI], w2 = wilson(fAll.reduce((s, x) => s + x, 0), fAll.length);
 const fMp = forme.flatMap((r) => Object.entries(r.plans.passif ?? {}).filter(([k, v]) => k.startsWith('galileeMelange') && v && !v.constant).map(([, v]) => +v.accepted));
 // D3 : budget
 const B = R.flatMap((r) => Object.values(r.budget ?? {}));
@@ -25,7 +26,7 @@ L.push(`| Formules de GALILÉE confirmées (D1, ${d1.length} formules) | ${pct(m
 L.push(`| Plafond : la vraie forme jugée sur C (D4) | ${pct(mean(orc('passif')))} (${orc('passif').length}) | ${pct(mean(orc('habitude')))} | plan pour la formule de GALILÉE : ${pct(mean(orc('actif-reel')))} · plan pour la vraie forme : ${pct(mean(orc('actif-oracle')))} (${orc('actif-oracle').length}) |`);
 L.push(`\nD1 apparié (actif − passif) : ${(100 * md).toFixed(0)} ± ${(100 * ci).toFixed(0)} points.`);
 L.push(`\n## Fausses confirmations (D2)\n`);
-L.push(`| | Passif | Actif |\n|---|---:|---:|\n| Formules apprises sur écarts mélangés | ${fMp.reduce((s, x) => s + x, 0)}/${fMp.length} | ${fM.reduce((s, x) => s + x, 0)}/${fM.length} |\n| Formules forcées, mondes compris | — | ${fC.reduce((s, x) => s + x, 0)}/${fC.length} |`);
+L.push(`| | Passif | Actif |\n|---|---:|---:|\n| Formules apprises sur écarts mélangés | ${fMp.reduce((s, x) => s + x, 0)}/${fMp.length} | ${fM.reduce((s, x) => s + x, 0)}/${fM.length} |\n| Formules forcées, mondes compris | — | ${fC.reduce((s, x) => s + x, 0)}/${fC.length} |\n| Formules non constantes injectées, mondes compris | — | ${fI.reduce((s, x) => s + x, 0)}/${fI.length} |`);
 const nConstM = forme.flatMap((r) => Object.entries(r.plans.passif ?? {}).filter(([k, v]) => k.startsWith('galileeMelange') && v && v.constant)).length;
 const nConstC = comp.flatMap((r) => Object.entries(r.plans.passif ?? {}).filter(([k, v]) => k.startsWith('galilee:') && v && v.constant)).length;
 L.push(`\nFormules constantes (non testables, donc jamais confirmées) : ${nConstM} sur écarts mélangés, ${nConstC} dans les mondes compris.`);

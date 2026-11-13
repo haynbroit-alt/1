@@ -70,6 +70,18 @@ export function runP3(seed) {
     if (kind === 'reel') rec('actif-reel', ra, k, 'oracleC');
     (out.budget ??= {})[key] = used(plan);
   }
+  // D2 direct : formules NON constantes injectées dans les mondes compris (fausses par construction), chacune jugée
+  // sous un plan actif construit pour la confirmer
+  if (cls === 'compris') {
+    const INJ = [['u0²', (u) => u[0] * u[0]], ['|u0|', (u) => Math.abs(u[0])], ['u0·u1', (u) => u[0] * u[1]], ['cos(π·u0)', (u) => Math.cos(Math.PI * u[0])], ['u0³', (u) => u[0] ** 3], ['u0²·u1', (u) => u[0] * u[0] * u[1]]];
+    for (const q of [seed % 6, (seed * 7 + 3) % 6].filter((v, i, a) => a.indexOf(v) === i)) {
+      const k = (seed + q) % 3, g = { f: INJ[q][1], text: INJ[q][0] };
+      const plan = activePlan(g);
+      const ri = runWorld(seed, { world: { cls, overrideU: toOverride(plan) }, inject: { k, g } });
+      const j = ri.targets.find((t) => t.target === k)?.injected;
+      (out.injected ??= []).push({ text: g.text, k, accepted: !!j?.accepted, logE: j?.logE ?? null });
+    }
+  }
   // plafond oracle sous un plan actif construit pour la vraie forme (sans GALILÉE)
   if (cls === 'forme' && r0.truth.target != null) {
     const FORMS = { carre: (u) => 0.3 * u[0] * u[0], saturation: (u) => (0.4 * u[0]) / (1 + 2 * Math.abs(u[0])), interaction: (u) => 0.3 * u[0] * u[1] };

@@ -140,7 +140,7 @@ export function runWorld(seed, hooks = {}) {
     const wantG1 = hors && fam === 'forme';
     const wantG2 = w.p2.cls === 'forme' && touched;
     const wantG3 = w.p2.cls === 'compris' && k === 0;
-    if (wantG1 || wantG2 || wantG3) {
+    if (wantG1 || wantG2 || wantG3 || (hooks.inject && hooks.inject.k === k)) {
       const bB = ols(rowsB, yB, pw), resB = dW.map((t, i) => yB[i] - dot(bB, rowsB[i]));
       const Xu = dW.map((t) => [U[t][0], U[t][1]]);
       const judge = (g) => {
@@ -158,6 +158,7 @@ export function runWorld(seed, hooks = {}) {
       };
       if (wantG1 || wantG3) { const g = galilee(seed * 10 + k, Xu, resB); hooks.onFormula?.({ k, kind: 'reel', g, Xu }); rec.galilee = judge(g); }
       if (hooks.oracleC && w.p2.cls === 'forme' && touched) rec.oracleC = judge({ f: FORMS[w.p2.form], text: 'oracle' });
+      if (hooks.inject && hooks.inject.k === k) rec.injected = judge(hooks.inject.g);
       if (wantG2) { const perm = resB.map((_, i) => i); for (let i = perm.length - 1; i > 0; i--) { const j = Math.floor(rng.next() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; } const gm = galilee(seed * 10 + k + 5, Xu, perm.map((i) => resB[i])); hooks.onFormula?.({ k, kind: 'melange', g: gm, Xu }); rec.galileeMelange = judge(gm); }
     }
     if (w.p2.cls === 'forme' && touched) { const f = FORMS[w.p2.form]; rec.oracleLogE = invariantLogE(rowsB, yB, pw, [{ cols: dW.map((t) => [f(U[t]) / 0.1]) }])[0]; }
