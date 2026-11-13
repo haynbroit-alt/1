@@ -36,7 +36,13 @@ async function runJob({ body: name, seed, policy }) {
   const { runYear } = await import('../src/core/run.js');
   const pol = policy.startsWith('v3') ? 'brain' : policy;
   const brainOpts = policy === 'v3-ferme' ? { families: ['level', 'slope'], omnibus: false, background: false } : {};
-  const r = runYear(body, pol, { seed, brainOpts });
+  let runBody = body, runPol = pol;
+  if (pol === 'oracle' && body.truth.oracleAdjust) {
+    // oracle non myope quand le corps fournit une correction (ex. calendrier de maintenance de l'usine)
+    const { trueOptimum } = await import('../src/core/run.js');
+    runBody = { ...body, habit: (t) => body.truth.oracleAdjust(t, trueOptimum(body, t)) }; runPol = 'habit';
+  }
+  const r = runYear(runBody, runPol, { seed, brainOpts });
   const beliefs = r.brain ? [...r.brain.beliefs(), ...r.brain.retracted()].map((b) => ({ outcome: b.outcome, key: b.key ?? b.family, tau: b.gate.kind === 'all' ? null : b.gate.tau, acceptedAt: b.acceptedAt, retractedAt: b.retractedAt ?? null })) : [];
   return { body: name, seed, policy, reward: r.reward, rmse: r.rmse, beliefs, events, secs: (Date.now() - t0) / 1000 };
 }
