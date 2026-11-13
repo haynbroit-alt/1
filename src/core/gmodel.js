@@ -163,7 +163,7 @@ export function fit(space, records, termsIn) {
   const cols = []; let c = space.nBase;
   for (const t of terms) { const k = termWidth(t); cols.push(k ? c : -1); c += k; }
   return {
-    space, terms, mn, an, bn, L, cols, n: M.n, logML: score, logMLu: Su.logML,
+    space, terms, mn, an, bn, L, cols, n: M.n, logML: score, logMLu: Su.logML, rows: D.rows,
     sigma2: bn / an,
     get Vn() { return getVn(); },
     refitWith(ts) { return fit(space, D.rows.map((x) => x.r), ts); },

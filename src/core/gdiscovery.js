@@ -1,3 +1,5 @@
+import { termValues, gateValue, basisValues } from './gmodel.js';
+import { normCdf } from '../rng.js';
 // CERVEAU GÉNÉRIQUE — découverte : grammaire DÉCLENCHEUR × MÉCANISME × VARIABLE, sélection bayésienne
 // (prior hiérarchique par famille), narration à partir de la structure et des libellés du corps.
 export const FAMILY_FR = {
@@ -46,6 +48,8 @@ function structural(space, family) {
   }
 }
 const COARSE = { pulse: 3 };
+// confronter les composantes structurelles à des ruptures datées : essayé en dev, a dégradé la saisonnalité (10/12 → 4/12) → désactivé
+const STRUCT_VS_DATED = false;
 
 // seuils candidats placés là où sont les données : déciles des valeurs observées de chaque variable
 export function adaptThetas(space, records) {
@@ -69,16 +73,40 @@ export function searchExplanations(space, model, t, { warmup = 28, lookback = 60
     if ((x.gate.kind !== 'step' && x.gate.kind !== 'sigmoid') || x.gate.end != null || x.family === 'variance') return;
     for (let tau = Math.max(lo, x.gate.tau + 6); tau <= hi; tau += stepTau) cands.push({ family: 'end', target: i, tau });
   });
-  const pool = cands.filter((c) => c.family === 'end' || !terms.some((x) => sameTerm(x, c)));
+  // Identifiabilité : un mécanisme lié à une variable (sensibilité, seuil, courbure) n'est candidat que si
+  // cette variable VARIE là où il agit ; sinon il équivaut à une simple rupture de niveau (plus simple).
+  const rows = model.rows.map((x) => x.r);
+  const distinct = (c) => {
+    if (!['in', 'in2', 'thresh'].includes(c.basis?.kind)) return true;
+    const v = [];
+    for (const r of rows) if (gateValue(c.gate, r.t) > 0) v.push(basisValues(space, c.basis, r)[0]);
+    if (v.length < 10) return false;
+    const m = v.reduce((s, x) => s + x, 0) / v.length, sd = Math.sqrt(v.reduce((s, x) => s + (x - m) ** 2, 0) / v.length);
+    return sd / (Math.abs(m) + sd + 1e-12) > 0.25;
+  };
+  const pool = cands.filter((c) => c.family === 'end' || (!terms.some((x) => sameTerm(x, c)) && distinct(c)));
   // Deux étages : pré-score rapide de TOUS les candidats, puis score exact (Tobit/ADF) des 5 meilleurs
   // de CHAQUE famille (aucune famille n'est écartée par le pré-filtre ; les non retenus comptent dans le prior).
+  // Le pré-score par imputation est aveugle à ce que cachent les ruptures (un pic, un effet viral pendant
+  // une rupture) : on retient aussi les candidats qui expliqueraient le mieux les jours plafonnés
+  // (statistique de score : Σ valeur du terme × écart tronqué attendu, sous le modèle actuel).
+  const cens = model.rows.filter((row) => row.cens).map((row) => {
+    const p = model.predict(row.r), a = (row.r.y - p.mu) / p.scale;
+    return { r: row.r, lam: Math.exp(-0.5 * a * a) / Math.sqrt(2 * Math.PI) / Math.max(1e-9, 1 - normCdf(a)) };
+  });
   const groups = {};
   for (const c of pool) {
     if (c.family === 'end' || c.basis.kind === 'variance') { c.exact = true; continue; }
     c.proxy = model.proxyScore(c);
+    let num = 0, den = 1e-9;
+    for (const x of cens) { const v = termValues(space, c, x.r)[0]; if (v) { num += v * x.lam; den += v * v; } }
+    c.censStat = Math.abs(num) / Math.sqrt(den);
     (groups[famKey(c)] ??= []).push(c);
   }
-  for (const g of Object.values(groups)) { g.sort((a, b) => b.proxy - a.proxy); g.slice(0, 5).forEach((c) => { c.exact = true; }); }
+  for (const g of Object.values(groups)) {
+    g.sort((a, b) => b.proxy - a.proxy); g.slice(0, 6).forEach((c) => { c.exact = true; });
+    if (cens.length) { g.sort((a, b) => b.censStat - a.censStat); g.slice(0, 6).forEach((c) => { c.exact = true; }); }
+  }
   for (const c of pool) {
     if (!c.exact) { c.logML = -Infinity; continue; }
     if (c.family === 'end') c.logML = model.refitWith(terms.map((x, i) => (i === c.target ? { ...x, gate: { ...x.gate, end: c.tau } } : x))).logML;
@@ -111,7 +139,7 @@ export function alternatives(space, term, t = null, families = FAMILIES) {
   const out = [];
   // une composante « depuis toujours » doit aussi affronter des explications DATÉES (sinon son avantage
   // a priori — aucune date à estimer — la protège à tort) : grille hebdomadaire de dates
-  if (term.gate.kind === 'all' && t != null) for (let tau = 28; tau <= t - 7; tau += 7) for (const f of ['level', 'trend', 'slope'].filter((x) => families.includes(x))) for (const c of dated(space, f, tau)) out.push(c);
+  if (term.gate.kind === 'all' && t != null && STRUCT_VS_DATED) for (let tau = 28; tau <= t - 7; tau += 7) for (const f of ['level', 'trend', 'slope'].filter((x) => families.includes(x))) for (const c of dated(space, f, tau)) out.push(c);
   if (term.gate.kind !== 'all') for (const f of families) for (const c of dated(space, f, term.gate.tau)) if (JSON.stringify(c.basis) !== JSON.stringify(term.basis) || c.gate.kind !== term.gate.kind) out.push({ ...c, gate: { ...c.gate, end: term.gate.end ?? null } });
   for (const f of families) if (f !== 'pulse') for (const c of structural(space, f)) if (JSON.stringify(c.basis) !== JSON.stringify(term.basis)) out.push(c);
   return out;
@@ -131,7 +159,7 @@ export function narrate(space, term, coef) {
       if (g.kind === 'ramp') return `${since}${until}, ${what} ${v('dérive', 'dérivent')} progressivement de ${pct(Math.exp(c) - 1)} par mois.`;
       if (g.kind === 'sigmoid') return `${since}${until}, ${what} ${v('a', 'ont')} basculé progressivement (sur ~${Math.round(4 * g.width)} jours) de ${pct(Math.exp(c) - 1)}.`;
       return `${since}${until}, ${what} ${v('a', 'ont')} ${c < 0 ? 'chuté' : 'bondi'} de ${pct(Math.exp(c) - 1)}.`;
-    case 'in': return `${since}${until}, ${what} ${v('réagit', 'réagissent')} ${c * (inp.sign ?? 1) < 0 ? 'plus fortement' : 'moins'} à « ${inp.label} » (sensibilité ${c >= 0 ? '+' : ''}${c.toFixed(2)}).`;
+    case 'in': return `${since}${until}, ${what} ${v('réagit', 'réagissent')} ${c * (inp.sign ?? 1) > 0 ? 'plus fortement' : 'moins'} à « ${inp.label} » (sensibilité ${c >= 0 ? '+' : ''}${c.toFixed(2)}).`;
     case 'in2': return `${since}, la réponse ${of} à « ${inp.label} » n’est pas proportionnelle (courbure ${c.toFixed(2)}).`;
     case 'thresh': return `${since}, au-delà de ${b.theta} ${inp.unit ?? ''} pour « ${inp.label} », ${what} ${v('change', 'changent')} de ${pct(Math.exp(c) - 1)} (effet de seuil).`;
     case 'dow': return `${since}, le ${DOW[b.d]}, ${what} ${v('a', 'ont')} changé de ${pct(Math.exp(c) - 1)} (habitude hebdomadaire déplacée).`;
