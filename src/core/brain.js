@@ -64,7 +64,7 @@ export function createBrain(body, opts = {}) {
     }
     invDefs.forEach((d, i) => {
       d.key = `inv${i}`;
-      d.label = d.terms.length === 1 ? `mémoire lente de « ${d.terms[0][0].label} » (λ=${d.lam})` : `stock caché « ${d.terms[0][0].label} » − « ${d.terms[1][0].label} » (λ=${d.lam})`;
+      d.label = d.terms.length === 1 ? `mémoire lente de « ${d.terms[0][0].label} » (λ=${d.lam})` : `accumulation cachée « ${d.terms[0][0].label} » − « ${d.terms[1][0].label} » (λ=${d.lam})`;
       latentDefs.push({ key: d.key, label: d.label, of: d.label, latent: true, latentKind: 'inv', inv: d, transform: 'lin', ref: 0, scale: 1, continuous: true });
     });
   }

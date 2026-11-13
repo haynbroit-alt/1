@@ -1,7 +1,7 @@
 # Protocole pré-enregistré n° 4 — CORTEX v5 et les quatre capacités manquantes
 
 **Ordre des opérations (vérifiable dans git) :**
-1. **Commit A**, celui qui contient ce fichier : le cerveau `src/core/` (v5) est **gelé**. La v4 est conservée telle quelle dans `src_v4/` (identique à `a7d0da6`). Aucune activité d'évaluation n'existe.
+1. **Commit A** — le commit intitulé « GEL de CORTEX v5 (commit A, corrigé) ». Un premier gel (`c4581de`) échouait au test d'audit, à cause du mot « stock » dans l'étiquette des variables inventées ; seule cette étiquette a changé, aucun comportement. Dans ce commit : le cerveau `src/core/` (v5) est **gelé**. La v4 est conservée telle quelle dans `src_v4/` (identique à `a7d0da6`). Aucune activité d'évaluation n'existe.
 2. **Commit B** : trois activités nouvelles, écrites après le gel et conçues **différemment** des activités de développement, sans modification de `src/core/`. On le vérifie avec `git diff A B -- src/core`, qui doit être vide.
 3. Exécution unique sur les **graines 401 à 430**, jamais utilisées, puis publication de tout.
 
@@ -21,7 +21,7 @@ Les mêmes que le protocole n° 3 : profit, erreur du modèle à 7 jours, décou
 
 Les mécanismes cachés sont classés à l'avance dans le commit B en quatre classes :
 - **représentable** : grammaire de la v4 ;
-- **inventable** : un stock ou une mémoire de mesure que seul le générateur C2 peut construire ;
+- **inventable** : un accumulation ou une mémoire de mesure que seul le générateur C2 peut construire ;
 - **approximable** ;
 - **hors de portée**.
 
