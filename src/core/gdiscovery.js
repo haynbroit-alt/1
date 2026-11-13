@@ -82,7 +82,9 @@ export function searchExplanations(space, model, t, { warmup = 28, lookback = 60
     for (const r of rows) if (gateValue(c.gate, r.t) > 0) v.push(basisValues(space, c.basis, r)[0]);
     if (v.length < 10) return false;
     const m = v.reduce((s, x) => s + x, 0) / v.length, sd = Math.sqrt(v.reduce((s, x) => s + (x - m) ** 2, 0) / v.length);
-    return sd / (Math.abs(m) + sd + 1e-12) > 0.25;
+    // sensibilité / courbure : la variable doit varier (écart-type absolu, sur l'échelle transformée) ;
+    // seuil : les deux côtés doivent être représentés
+    return c.basis.kind === 'thresh' ? sd / (Math.abs(m) + sd + 1e-12) > 0.25 : sd > 0.04;
   };
   const pool = cands.filter((c) => c.family === 'end' || (!terms.some((x) => sameTerm(x, c)) && distinct(c)));
   // Deux étages : pré-score rapide de TOUS les candidats, puis score exact (Tobit/ADF) des 5 meilleurs

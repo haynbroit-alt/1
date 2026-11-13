@@ -40,7 +40,7 @@ export function createBrain(body, opts = {}) {
   }
   const A = {
     body, opts: o, M, stageCount: Object.fromEntries(STAGES.map(([k]) => [k, 0])), today: null, history: [], insights: [],
-    ad: Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: l.init, 0.8: l.init }])), cum: 0, experimentUntil: -1, maxStep: 0.15,
+    ad: Object.fromEntries(decLevers.map((l) => [l.key, { 0.5: l.init, 0.8: l.init }])), cum: 0, experimentUntil: -1, maxStep: 0.15, expLever: null, expCooldown: {},
   };
   const trace = [];
   const emit = (stage, text, data = {}) => { A.stageCount[stage]++; trace.push({ t: A.today?.t ?? null, stage, text, data }); };
@@ -110,6 +110,14 @@ export function createBrain(body, opts = {}) {
       for (const k in m.ec) m.ec[k] = { pos: Math.min(m.ec[k].pos, EH * f), neg: Math.min(m.ec[k].neg, EH * f) };
       if (!r.accepted && r.pChange > 0.7) A.experimentUntil = Math.max(A.experimentUntil, t + 7);
     }
+    // apprentissage actif : une corrélation erreur–levier qui monte (sans preuve encore) déclenche une
+    // expérience ciblée sur ce levier, pour rendre son effet mesurable
+    for (const m of Object.values(M)) for (const [k, v] of Object.entries(m.ec)) {
+      const lv = contLevers.find((l) => l.key === k);
+      if (!lv || t < WARMUP || Math.max(v.pos, v.neg) < EH * 0.5 || t < (A.expCooldown[k] ?? -1)) continue;
+      A.experimentUntil = Math.max(A.experimentUntil, t + 10); A.expLever = k; A.expCooldown[k] = t + 40;
+      emit('confronter', `Soupçon : mes erreurs sur « ${m.out.label} » se corrèlent à « ${lv.label} » → expérience ciblée de 10 jours (variations de ±15 %).`, { verdict: 'soupcon', lever: k });
+    }
     if (!trace.some((e) => e.stage === 'confronter')) emit('confronter', t < WARMUP ? `Phase d'apprentissage (${t}/${WARMUP}).` : `Confirmation : les faits d'hier sont compatibles avec ma théorie.`, { verdict: t < WARMUP ? 'apprentissage' : 'confirmation' });
 
     // ANTICIPER / PRIORISER
@@ -127,6 +135,7 @@ export function createBrain(body, opts = {}) {
     }
     evpi /= 3;
     const experimenting = t <= A.experimentUntil;
+    if (!experimenting) A.expLever = null;
     const mode = experimenting ? 'experiment' : evpi > Math.max(1, 0.01 * Math.abs(free.value)) && t < 300 ? 'explore' : 'exploit';
     emit('prioriser', `Valeur de l'information ≈ ${num(evpi)} €/jour → mode ${mode === 'explore' ? 'EXPLORATION (Thompson)' : mode === 'experiment' ? 'EXPÉRIENCE' : 'EXPLOITATION'}.`, { evpi, mode });
 
@@ -136,13 +145,14 @@ export function createBrain(body, opts = {}) {
     let proposal = optimizeAction(body, decP, ctx, { constraint: within, start: cur });
     proposal = withCapacity(body, proposal.action, P, ctx);
     let note = '';
-    const ditherLever = contLevers.length ? contLevers[Math.floor(t / 2) % contLevers.length] : null;
+    const ditherLever = mode === 'experiment' && A.expLever ? contLevers.find((l) => l.key === A.expLever) : contLevers.length ? contLevers[Math.floor(t / 2) % contLevers.length] : null;
+    const amp = mode === 'experiment' && A.expLever ? 0.15 : DITHER;
     if ((mode === 'experiment' || (mode === 'exploit' && o.vigilance && t >= WARMUP)) && ditherLever) {
       const sign = t % 2 === 0 ? 1 : -1, lv = ditherLever;
-      const v = Math.min(lv.max, Math.max(lv.min, Math.round((proposal.action[lv.key] * (1 + DITHER * sign)) / lv.step) * lv.step));
+      const v = Math.min(lv.max, Math.max(lv.min, Math.round((proposal.action[lv.key] * (1 + amp * sign)) / lv.step) * lv.step));
       // jour de variation : un cran de capacité en plus, pour voir la réponse non plafonnée
       const cand = withCapacity(body, { ...proposal.action, [lv.key]: v }, P, ctx, 0.05);
-      if (mode === 'experiment' || proposal.value - cand.value < 0.03 * Math.abs(proposal.value) + 2) { proposal = cand; note = ` Variation ${mode === 'experiment' ? 'expérimentale' : 'de vigilance'} de « ${lv.label} » (${sign > 0 ? '+' : '−'}${DITHER * 100} %).`; }
+      if (mode === 'experiment' || proposal.value - cand.value < 0.03 * Math.abs(proposal.value) + 2) { proposal = cand; note = ` Variation ${mode === 'experiment' ? 'expérimentale' : 'de vigilance'} de « ${lv.label} » (${sign > 0 ? '+' : '−'}${Math.round(amp * 100)} %).`; }
     }
     // expériences de dé-censure (hypothèses calendaires plausibles mais masquées)
     for (const m of Object.values(M)) {
