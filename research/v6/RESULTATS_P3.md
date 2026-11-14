@@ -44,3 +44,30 @@ Temps moyen par monde : 46.9 s
 2. **La description n'est pas certifiée.** Comme dans P1, le pari certifie qu'une formule apporte une information réelle, pas qu'elle soit la loi vraie.
 3. **Le coût en profit des expériences n'est pas mesuré.** Le budget est exprimé en unités de levier. L'arbitrage avec le profit, et les plans pour les modes lents (paliers maintenus), relèvent de P4.
 4. **Coût de calcul** : 47 s par monde, soit plusieurs simulations par plan.
+Temps moyen par monde : 39.3 s
+
+## Notes d'exécution
+
+- Exécution unique du 14 novembre 2026, prototype gelé `f3778b4`, sans modification du code.
+- Les 400 graines ont été passées par paquets de dix, quatre à la fois (`research/v6/p3-tranches/`), puis assemblées
+  dans `p3-test.json`. Chaque graine est déterministe : le découpage ne change aucun résultat.
+- Une première tentative en trois tranches a été interrompue avant d'écrire le moindre fichier (limite de durée de
+  la machine) ; aucun résultat n'en a été lu.
+
+## Lecture factuelle (rédigée après l'exécution unique)
+
+**Ce qui est démontré.**
+- Les trois critères sont atteints. Sous le plan d'expériences actif, 84 % des formules de GALILÉE gagnent leur pari
+  (37 sur 44), contre 23 % sous le plan passif, à budget égal : différence appariée de 61 ± 15 points.
+- La cause supposée dans P2 est confirmée : sous le plan passif, la **vraie** forme elle-même ne gagne son pari que
+  dans 13 % des mondes ; sans variation des leviers (habitude), jamais.
+- La garantie tient sous plan adaptatif : 4 formules fausses confirmées sur 400 injectées, chacune jugée sous un plan
+  construit pour la confirmer (1 %, borne haute 3 %).
+
+**Ce qui limite la portée.**
+- Seuls 44 mondes « forme » sur 200 arrivent jusqu'au pari : dans les autres, la sonde ne signale rien ou GALILÉE
+  ne rend qu'une constante. Le plan actif résout la confirmation, pas la détection.
+- Sur les écarts mélangés, une seule paire de formules non constantes a pu être jugée (1 confirmée sur 2 sous plan
+  actif) : trop peu pour conclure sur ce cas.
+- Les mondes n'ont ni prix ni comptabilité : le résultat porte sur la confirmation d'une loi, pas sur un gain.
+- Coût : 39 s de calcul par monde.
