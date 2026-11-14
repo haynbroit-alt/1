@@ -38,8 +38,6 @@ export function makeWorld(seed, kind = kindOf(seed), opts = {}) {
       modes.push({ tau, lam: 1 - 1 / tau, target: r.int(0, K - 1), sources: idx.map((j, q) => ({ idx: j, w: (q === 0 ? 1 : r.uniform(0.4, 1)) * (r.next() < 0.5 ? -1 : 1) })), strength: r.uniform(0.05, 0.25), a: 1 });
     }
   }
-  // P3 : leviers imposés (plan d'expériences) à partir d'un jour donné ; rien ne change avant
-  if (opts.overrideU) for (let t = 0; t < T; t++) { const v = opts.overrideU(t); if (v) U[t] = [...v]; }
   if (opts.flouLever != null) {
     const r3 = makeRng(seed * 37 + 11);
     modes.length = 0;
@@ -79,6 +77,10 @@ export function makeWorld(seed, kind = kindOf(seed), opts = {}) {
       modes.forEach((m, i) => { if (!Number.isFinite(r[i]) || r[i] > 5) m.a /= 4; else if (r[i] > 0) m.a *= Math.sqrt(m.strength / r[i]); });
     }
   }
+  // P3 : leviers imposés (plan d'expériences). Appliqués APRÈS le calibrage des amplitudes, qui se fait toujours sur les
+  // leviers par défaut : sinon le calibrage (sur toute l'année) faisait dépendre les jours AVANT le plan du plan lui-même.
+  // Correctif publié après P3 (voir RESULTATS_P3.md, « Correction ») ; sans overrideU, rien ne change.
+  if (opts.overrideU) for (let t = 0; t < T; t++) { const v = opts.overrideU(t); if (v) U[t] = [...v]; }
   const { Y, Z } = simulate();
   modes.forEach((m, i) => { const z = Z[i].slice(30).map((x) => m.a * x); const mu = z.reduce((s, x) => s + x, 0) / z.length; m.realized = Math.sqrt(z.reduce((s, x) => s + (x - mu) ** 2, 0) / z.length); });
   return { seed, kind, Y, U, truth: { modes: modes.map(({ tau, target, sources, realized }) => ({ tau, target, sources, realized })), mis } };
