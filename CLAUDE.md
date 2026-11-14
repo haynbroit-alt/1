@@ -13,3 +13,11 @@ Ce dépôt est protégé par le GARDIEN de l'espace commun (`../Tr`). Les fichie
 - Lire un fichier avant de le modifier, et seulement celui-là ; retouches ciblées, pas de réécriture.
 - Ne pas parcourir tout le dépôt ; les résultats se lisent dans les fichiers de `bench/` et les protocoles.
 - `npm test` avant tout commit ; un banc long se lance en arrière-plan, une seule fois.
+
+## Posture entrepreneuriale (voir `ENTREPRENDRE.md`)
+- Chercher la valeur économique réelle fait partie du travail, sans attendre qu'on le demande : pour chaque capacité
+  construite, se demander qui paierait, combien, et quel est le plus petit test réel.
+- Une réussite est un paiement prouvé, inscrit au registre (`src/entreprendre/registre.js`). Jamais un chiffre simulé.
+- Seul, l'agent prépare, analyse, rédige et propose. Dépenser, contacter quelqu'un, créer un compte, s'inscrire ou
+  signer exige un mandat écrit du propriétaire (plafonds, canaux, expiration) : sans mandat, s'arrêter au dernier pas
+  et le dire.
