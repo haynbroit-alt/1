@@ -30,6 +30,20 @@ Formules jugées (D1) : carre → `sin(u0)^6·u0^6` P✗ A✓ · interaction →
 - D3 budget : ✅
 - Abandon (D2 échoue) : non
 
+Temps moyen par monde : 46.9 s
+
+## Lecture honnête (rédigée après l'exécution unique ; prototype gelé `f3778b4`)
+**Ce qui est démontré.**
+- **Choisir ses expériences transforme les propositions de GALILÉE en connaissances confirmées.** À budget égal en leviers, **84 % des formules** de GALILÉE (sur 44) sont confirmées sur des jours qu'il n'a jamais vus, contre **23 %** avec des leviers changés au hasard, soit **+61 ± 15 points** en différence appariée sur la même formule. Avec des leviers fixes (l'habitude), on n'en confirme **aucune**. L'échec G1 de P2 venait donc bien du plan d'expériences, pas de GALILÉE.
+- **La cause supposée de P2 est vérifiée** : même la vraie forme n'est confirmée que dans 13 % des cas sous le plan passif, et dans 0 % avec l'habitude.
+- **La garantie tient sous plan adaptatif.** 400 formules fausses par construction ont été injectées dans des mondes compris, chacune avec un plan **conçu pour la confirmer**. Seulement **4** l'ont été (1 %, borne haute 3 %), pour α = 10 %. Un plan qui ne dépend que de ce qui est figé avant C ne casse pas la validité du pari.
+- Le budget (|u₀| moyen ≤ 0,5, u₁ actif ≤ 30 % des jours) est respecté.
+
+**Limites et points faibles.**
+1. **Écarts mélangés : 1 confirmation sur 2.** GALILÉE ne produit presque jamais de formule non constante sur des données mélangées (198 constantes sur 200) ; l'échantillon est donc minuscule. Dans un monde **forme**, une formule quelconque corrélée à la vraie forme peut être confirmée **à juste titre**, puisque l'hypothèse nulle (« rien au-delà du modèle ») y est fausse. La confirmation porte sur l'existence d'un effet capté par la formule, pas sur l'exactitude de sa forme : `0,027·u1/u0` a été confirmée.
+2. **La description n'est pas certifiée.** Comme dans P1, le pari certifie qu'une formule apporte une information réelle, pas qu'elle soit la loi vraie.
+3. **Le coût en profit des expériences n'est pas mesuré.** Le budget est exprimé en unités de levier. L'arbitrage avec le profit, et les plans pour les modes lents (paliers maintenus), relèvent de P4.
+4. **Coût de calcul** : 47 s par monde, soit plusieurs simulations par plan.
 Temps moyen par monde : 39.3 s
 
 ## Notes d'exécution
