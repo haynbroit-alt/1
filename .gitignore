@@ -1,1 +1,4 @@
 bench/*.log
+
+# journal de progression des bancs : les résultats se publient dans les fichiers .json et .md
+research/v6/*.log
