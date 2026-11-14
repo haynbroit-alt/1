@@ -44,7 +44,11 @@ Temps moyen par monde : 46.9 s
 2. **La description n'est pas certifiée.** Comme dans P1, le pari certifie qu'une formule apporte une information réelle, pas qu'elle soit la loi vraie.
 3. **Le coût en profit des expériences n'est pas mesuré.** Le budget est exprimé en unités de levier. L'arbitrage avec le profit, et les plans pour les modes lents (paliers maintenus), relèvent de P4.
 4. **Coût de calcul** : 47 s par monde, soit plusieurs simulations par plan.
-Temps moyen par monde : 39.3 s
+
+## Seconde exécution indépendante (autre session, mêmes graines, même prototype gelé)
+Une autre session a lancé, sans le savoir, la même exécution unique ; les deux ont été fusionnées dans `main` (PR #10 et #11). Ses 400 résultats sont **identiques** aux miens (à la durée près, vérifié). `p3-test.json`, qui contenait les deux tableaux bout à bout après la fusion, ne garde plus qu'un exemplaire. Les tranches de cette exécution restent dans `p3-tranches/`.
+
+Temps moyen par monde (seconde exécution) : 39.3 s
 
 ## Notes d'exécution
 
@@ -71,3 +75,10 @@ Temps moyen par monde : 39.3 s
   actif) : trop peu pour conclure sur ce cas.
 - Les mondes n'ont ni prix ni comptabilité : le résultat porte sur la confirmation d'une loi, pas sur un gain.
 - Coût : 39 s de calcul par monde.
+
+## Correction (14 novembre 2026) : fuite du plan dans les segments A et B
+**Défaut.** Dans `worlds.js`, `overrideU` s'appliquait **avant** le calibrage des amplitudes de modes. Or ce calibrage simule toute l'année. Dans les mondes qui contiennent des modes, changer les leviers de C modifiait donc aussi les données de A et de B, jusqu'à 0,32 en log. P3 supposait que A et B, et donc la formule de GALILÉE, restaient identiques d'un plan à l'autre. Ce n'était pas vrai pour **8 des 44 formules** jugées (texte différent entre les passes passive et active).
+
+**Impact, mesuré en relisant les résultats publiés, sans rien recalculer.** Sur les 36 formules que le défaut n'a pas touchées : **28 % confirmées en passif, 86 % en actif, +58 ± 16 points**. Sur l'ensemble publié : +61 ± 15. La conclusion D1 tient. D2 n'est pas concerné : il porte sur les mondes compris, où les formules injectées ne dépendent pas de A et B (4 sur 400 dans les deux cas).
+
+**Correctif.** Le calibrage se fait désormais toujours sur les leviers par défaut, et le plan s'applique ensuite. Vérification : écart nul sur Y avant le jour du plan (graines 1 à 12) ; mondes de P1 et résultats de P2 identiques bit à bit. Comme le veut la règle du dépôt (une exécution unique ne se relance pas), le test P3 **n'a pas été relancé** sur les graines 5001 à 5400.
